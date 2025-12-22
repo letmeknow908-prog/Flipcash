@@ -1,12 +1,17 @@
 const redis = require('redis');
-require('dotenv').config();
 
+// Create Redis client with Railway variables
 const redisClient = redis.createClient({
+  url: process.env.REDIS_URL || `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || 6379}`,
   socket: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_PORT || 6379,
+    reconnectStrategy: (retries) => {
+      if (retries > 10) {
+        console.error('❌ Redis reconnection failed after 10 attempts');
+        return new Error('Redis reconnection failed');
+      }
+      return Math.min(retries * 100, 3000);
+    },
   },
-  password: process.env.REDIS_PASSWORD || undefined,
 });
 
 redisClient.on('error', (err) => {
@@ -17,13 +22,27 @@ redisClient.on('connect', () => {
   console.log('✅ Redis connected successfully');
 });
 
+redisClient.on('ready', () => {
+  console.log('✅ Redis ready to accept commands');
+});
+
+redisClient.on('reconnecting', () => {
+  console.log('🔄 Redis reconnecting...');
+});
+
+// Connect to Redis
 const connectRedis = async () => {
-  if (!redisClient.isOpen) {
-    await redisClient.connect();
+  try {
+    if (!redisClient.isOpen) {
+      await redisClient.connect();
+    }
+  } catch (error) {
+    console.error('❌ Failed to connect to Redis:', error);
+    // Don't throw - allow app to start without Redis
   }
 };
 
-module.exports = {
-  redisClient,
-  connectRedis,
-};
+// Initialize connection
+connectRedis();
+
+module.exports = { redisClient, connectRedis };
