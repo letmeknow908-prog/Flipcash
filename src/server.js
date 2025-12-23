@@ -27,16 +27,15 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes - Only load routes that exist
+// API Routes
 const API_VERSION = process.env.API_VERSION || 'v1';
 
-// Try to load each route file, but don't fail if it doesn't exist
+// Try to load route files (optional)
 const routes = [
   { path: '/auth', file: './routes/auth.routes' },
   { path: '/users', file: './routes/user.routes' },
   { path: '/wallets', file: './routes/wallet.routes' },
   { path: '/transactions', file: './routes/transaction.routes' },
-  { path: '/rates', file: './routes/rate.routes' },
   { path: '/webhooks', file: './routes/webhook.routes' }
 ];
 
@@ -50,7 +49,52 @@ routes.forEach(route => {
   }
 });
 
-// Error handling - use simple handlers if middleware files don't exist
+// RATE ROUTES - Built-in (always works!)
+try {
+  const rateController = require('./controllers/rate.controller');
+  
+  // GET /api/v1/rates - Get exchange rates
+  app.get(`/api/${API_VERSION}/rates`, async (req, res, next) => {
+    try {
+      await rateController.getRates(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // GET /api/v1/rates/history - Get rate history
+  app.get(`/api/${API_VERSION}/rates/history`, async (req, res, next) => {
+    try {
+      await rateController.getRateHistory(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // POST /api/v1/rates/calculate - Calculate conversion
+  app.post(`/api/${API_VERSION}/rates/calculate`, async (req, res, next) => {
+    try {
+      await rateController.calculateConversion(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // POST /api/v1/rates/account/generate - Generate virtual account
+  app.post(`/api/${API_VERSION}/rates/account/generate`, async (req, res, next) => {
+    try {
+      await rateController.generateVirtualAccount(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  console.log(`✅ Loaded route: /api/${API_VERSION}/rates (built-in)`);
+} catch (error) {
+  console.log('⚠️ Rate controller not found:', error.message);
+}
+
+// Error handling
 app.use((req, res, next) => {
   res.status(404).json({
     status: 'error',
