@@ -1,0 +1,45 @@
+═══════════════════════════════════════════════════
+   FLIPCASH BACKEND - QUICK DEPLOYMENT GUIDE
+═══════════════════════════════════════════════════
+
+📦 YOU NEED TO ADD 3 FILES:
+
+1. src/controllers/rate.controller.js
+2. src/services/flutterwave.service.js  
+3. src/routes/rate.routes.js
+
+═══════════════════════════════════════════════════
+
+🚀 STEP BY STEP:
+
+Step 1: Extract this ZIP
+
+Step 2: Go to your backend folder
+
+Step 3: Copy files:
+   - rate.controller.js → src/controllers/
+   - flutterwave.service.js → src/services/
+   - rate.routes.js → src/routes/
+
+Step 4: Create services folder if needed:
+   mkdir src/services
+
+Step 5: Push to GitHub:
+   git add src/controllers/rate.controller.js
+   git add src/services/flutterwave.service.js
+   git add src/routes/rate.routes.js
+   git commit -m "Add rate endpoints"
+   git push origin main
+
+═══════════════════════════════════════════════════
+
+✅ DONE!
+
+Railway will deploy automatically.
+
+Test:
+curl https://flipcash-production.up.railway.app/api/v1/rates
+
+Should return exchange rates! ✅
+
+═══════════════════════════════════════════════════
