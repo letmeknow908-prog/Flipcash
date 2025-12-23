@@ -3,7 +3,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 require('dotenv').config();
-
 const { connectRedis } = require('./config/redis');
 const logger = require('./utils/logger');
 
@@ -66,6 +65,13 @@ const startServer = async () => {
       logger.info(`🚀 FlipCash API server running on port ${PORT}`);
       logger.info(`📍 Environment: ${process.env.NODE_ENV}`);
       logger.info(`🌐 API Base URL: http://localhost:${PORT}/api/${API_VERSION}`);
+      logger.info(`✅ Routes registered:`);
+      logger.info(`   - /api/${API_VERSION}/auth`);
+      logger.info(`   - /api/${API_VERSION}/users`);
+      logger.info(`   - /api/${API_VERSION}/wallets`);
+      logger.info(`   - /api/${API_VERSION}/transactions`);
+      logger.info(`   - /api/${API_VERSION}/rates`);
+      logger.info(`   - /api/${API_VERSION}/webhooks`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
@@ -78,11 +84,6 @@ startServer();
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM signal received: closing HTTP server');
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  logger.info('SIGINT signal received: closing HTTP server');
   process.exit(0);
 });
 
