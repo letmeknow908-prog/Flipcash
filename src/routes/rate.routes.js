@@ -1,27 +1,34 @@
 const express = require('express');
 const router = express.Router();
-const authenticate = require('../middleware/authenticate');
+const rateController = require('../controllers/rate.controller');
+const { authenticate } = require('../middleware/authenticate');
 
-router.use(authenticate);
+/**
+ * @route   GET /api/v1/rates
+ * @desc    Get current exchange rates
+ * @access  Public
+ */
+router.get('/', rateController.getRates);
 
-// Get all exchange rates
-router.get('/', async (req, res) => {
-  res.json({ 
-    status: 'success', 
-    data: {
-      rates: [
-        { from: 'NGN', to: 'KSH', rate: 0.29, lastUpdated: new Date() },
-        { from: 'BTC', to: 'KSH', rate: 13500000, lastUpdated: new Date() },
-        { from: 'ETH', to: 'KSH', rate: 450000, lastUpdated: new Date() },
-        { from: 'USDT', to: 'KSH', rate: 129, lastUpdated: new Date() },
-      ]
-    }
-  });
-});
+/**
+ * @route   GET /api/v1/rates/history
+ * @desc    Get historical rates
+ * @access  Public
+ */
+router.get('/history', rateController.getRateHistory);
 
-// Get specific rate
-router.get('/:from/:to', async (req, res) => {
-  res.json({ status: 'success', message: 'Get specific rate endpoint' });
-});
+/**
+ * @route   POST /api/v1/rates/calculate
+ * @desc    Calculate conversion between currencies
+ * @access  Public
+ */
+router.post('/calculate', rateController.calculateConversion);
+
+/**
+ * @route   POST /api/v1/rates/account/generate
+ * @desc    Generate virtual account for user
+ * @access  Private (requires authentication)
+ */
+router.post('/account/generate', authenticate, rateController.generateVirtualAccount);
 
 module.exports = router;
