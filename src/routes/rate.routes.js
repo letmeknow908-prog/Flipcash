@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const rateController = require('../controllers/rate.controller');
-const { authenticate } = require('../middleware/authenticate');
 
 /**
  * @route   GET /api/v1/rates
@@ -27,8 +26,8 @@ router.post('/calculate', rateController.calculateConversion);
 /**
  * @route   POST /api/v1/rates/account/generate
  * @desc    Generate virtual account for user
- * @access  Private (requires authentication)
+ * @access  Public (TODO: add authentication)
  */
-router.post('/account/generate', authenticate, rateController.generateVirtualAccount);
+router.post('/account/generate', rateController.generateVirtualAccount);
 
 module.exports = router;
