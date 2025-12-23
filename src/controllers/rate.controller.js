@@ -1,27 +1,35 @@
 const flutterwaveService = require('../services/flutterwave.service');
-const pool = require('../config/database');
 
 /**
  * Get current exchange rates
- * @route GET /api/v1/rates
  */
 exports.getRates = async (req, res, next) => {
   try {
-    console.log('💱 Fetching exchange rates...');
-    
-    // Get rates from Flutterwave service
-    const rates = await flutterwaveService.getExchangeRates();
-    
-    console.log('✅ Rates fetched:', rates);
-    
+    // Get rates from Flutterwave or use fallback
+    let rates;
+    try {
+      rates = await flutterwaveService.getExchangeRates();
+    } catch (error) {
+      console.log('Flutterwave API error, using fallback rates');
+      // Fallback rates - always return something
+      rates = {
+        NGN_KSH: 0.285,
+        KSH_NGN: 3.508,
+        NGN_USD: 0.0012,
+        KSH_USD: 0.0077,
+        USD_NGN: 833.33,
+        USD_KSH: 129.87,
+        updated_at: new Date()
+      };
+    }
+
     res.json({
       status: 'success',
       data: rates
     });
   } catch (error) {
-    console.error('❌ Get rates error:', error);
-    
-    // Return fallback rates even on error (CRITICAL for dashboard)
+    console.error('Get rates error:', error);
+    // Even if everything fails, return fallback
     res.json({
       status: 'success',
       data: {
@@ -38,141 +46,144 @@ exports.getRates = async (req, res, next) => {
 };
 
 /**
- * Get rate history (for charts/analytics)
- * @route GET /api/v1/rates/history
+ * Get rate history (placeholder)
  */
 exports.getRateHistory = async (req, res, next) => {
   try {
-    const { from, to, days = 7 } = req.query;
-    
-    // TODO: Implement rate history from database
-    // For now, return mock data
+    const { from, to, days = 30 } = req.query;
+
+    // Return mock historical data
     const history = [];
-    const today = new Date();
+    const baseRate = from === 'NGN' && to === 'KSH' ? 0.285 : 3.508;
     
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(today);
+    for (let i = days; i >= 0; i--) {
+      const date = new Date();
       date.setDate(date.getDate() - i);
-      
       history.push({
         date: date.toISOString().split('T')[0],
-        rate: 0.285 + (Math.random() * 0.01 - 0.005), // Slight variation
+        rate: baseRate + (Math.random() * 0.01 - 0.005),
+        from,
+        to
       });
     }
-    
+
     res.json({
       status: 'success',
-      data: {
-        from: from || 'NGN',
-        to: to || 'KSH',
-        history
-      }
+      data: { history }
     });
   } catch (error) {
-    console.error('❌ Get rate history error:', error);
-    next(error);
+    console.error('Get rate history error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
   }
 };
 
 /**
- * Calculate conversion between currencies
- * @route POST /api/v1/rates/calculate
+ * Calculate conversion
  */
 exports.calculateConversion = async (req, res, next) => {
   try {
     const { amount, from, to } = req.body;
-    
+
     if (!amount || !from || !to) {
       return res.status(400).json({
         status: 'error',
-        message: 'Amount, from, and to currencies are required'
+        message: 'Missing required fields: amount, from, to'
       });
     }
-    
+
     // Get current rates
-    const rates = await flutterwaveService.getExchangeRates();
+    let rates;
+    try {
+      rates = await flutterwaveService.getExchangeRates();
+    } catch (error) {
+      rates = {
+        NGN_KSH: 0.285,
+        KSH_NGN: 3.508,
+        NGN_USD: 0.0012,
+        KSH_USD: 0.0077,
+        USD_NGN: 833.33,
+        USD_KSH: 129.87
+      };
+    }
+
     const rateKey = `${from}_${to}`;
     const rate = rates[rateKey];
-    
+
     if (!rate) {
       return res.status(400).json({
         status: 'error',
         message: `Exchange rate not available for ${from} to ${to}`
       });
     }
-    
-    const convertedAmount = parseFloat(amount) * parseFloat(rate);
+
+    const convertedAmount = parseFloat(amount) * rate;
     const fee = convertedAmount * 0.01; // 1% fee
     const finalAmount = convertedAmount - fee;
-    
+
     res.json({
       status: 'success',
       data: {
         from,
         to,
         amount: parseFloat(amount),
-        rate: parseFloat(rate),
+        rate,
         convertedAmount,
         fee,
-        finalAmount,
-        timestamp: new Date()
+        finalAmount
       }
     });
   } catch (error) {
-    console.error('❌ Calculate conversion error:', error);
-    next(error);
+    console.error('Calculate conversion error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
   }
 };
 
 /**
- * Generate virtual account for user (Flutterwave)
- * @route POST /api/v1/rates/account/generate
+ * Generate virtual account
  */
 exports.generateVirtualAccount = async (req, res, next) => {
   try {
-    const user = req.user;
-    
-    console.log('🏦 Generating virtual account for user:', user.id);
+    const { userId, email, firstName, lastName } = req.body;
 
-    // Check if user already has virtual account
-    if (user.virtualAccount || user.virtual_account) {
+    if (!email || !firstName || !lastName) {
       return res.status(400).json({
         status: 'error',
-        message: 'You already have a virtual account'
+        message: 'Missing required fields: email, firstName, lastName'
       });
     }
 
-    // Check KYC status (optional - remove if you don't want this requirement)
-    // if (user.kycStatus !== 'verified') {
-    //   return res.status(403).json({
-    //     status: 'error',
-    //     message: 'Please complete KYC verification first'
-    //   });
-    // }
-
-    // Generate account using Flutterwave
-    const accountData = await flutterwaveService.generateVirtualAccount(user);
-
-    // Update user in database
-    await pool.query(
-      'UPDATE users SET virtual_account = $1, virtual_account_bank = $2 WHERE id = $3',
-      [accountData.accountNumber, accountData.accountBank, user.id]
-    );
-    
-    console.log('✅ Virtual account created:', accountData);
+    // Try to generate account via Flutterwave
+    let account;
+    try {
+      account = await flutterwaveService.generateVirtualAccount({
+        id: userId || Date.now(),
+        email,
+        firstName,
+        lastName
+      });
+    } catch (error) {
+      console.error('Flutterwave error:', error);
+      return res.status(500).json({
+        status: 'error',
+        message: 'Failed to generate virtual account. Please try again later.'
+      });
+    }
 
     res.json({
       status: 'success',
-      message: 'Virtual account generated successfully',
-      data: accountData
+      data: account
     });
   } catch (error) {
-    console.error('❌ Generate account error:', error);
-    
-    // Return user-friendly error
+    console.error('Generate virtual account error:', error);
     res.status(500).json({
       status: 'error',
-      message: error.message || 'Failed to generate virtual account. Please try again later.'
+      message: error.message
     });
   }
 };
