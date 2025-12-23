@@ -22,7 +22,8 @@
     "axios": "^1.4.0",
     "winston": "^3.10.0",
     "express-rate-limit": "^6.8.0",
-    "flutterwave-node-v3": "^1.1.10"
+    "flutterwave-node-v3": "^1.1.10",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
