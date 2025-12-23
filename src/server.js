@@ -3,8 +3,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 require('dotenv').config();
-const { connectRedis } = require('./config/redis');
-const logger = require('./utils/logger');
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
@@ -29,7 +27,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg.trim()) } }));
+app.use(morgan('combined'));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -54,27 +52,48 @@ app.use(`/api/${API_VERSION}/webhooks`, webhookRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-// Start server
+// Start server WITHOUT Redis dependency
 const startServer = async () => {
   try {
-    // Connect to Redis
-    await connectRedis();
+    console.log('🚀 Starting FlipCash API server...');
+    
+    // Try to connect to Redis if available, but don't fail if it's not
+    try {
+      if (process.env.REDIS_URL || process.env.REDIS_HOST) {
+        const redis = require('redis');
+        const redisClient = redis.createClient({
+          url: process.env.REDIS_URL || `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT || 6379}`
+        });
+        
+        redisClient.on('error', (err) => console.log('⚠️ Redis Client Error (continuing without Redis):', err.message));
+        redisClient.on('connect', () => console.log('✅ Redis connected'));
+        
+        await redisClient.connect().catch(err => {
+          console.log('⚠️ Redis connection failed (continuing without Redis):', err.message);
+        });
+      } else {
+        console.log('ℹ️ Redis not configured - running without cache');
+      }
+    } catch (redisError) {
+      console.log('⚠️ Redis not available (continuing without Redis):', redisError.message);
+    }
     
     // Start listening
     app.listen(PORT, () => {
-      logger.info(`🚀 FlipCash API server running on port ${PORT}`);
-      logger.info(`📍 Environment: ${process.env.NODE_ENV}`);
-      logger.info(`🌐 API Base URL: http://localhost:${PORT}/api/${API_VERSION}`);
-      logger.info(`✅ Routes registered:`);
-      logger.info(`   - /api/${API_VERSION}/auth`);
-      logger.info(`   - /api/${API_VERSION}/users`);
-      logger.info(`   - /api/${API_VERSION}/wallets`);
-      logger.info(`   - /api/${API_VERSION}/transactions`);
-      logger.info(`   - /api/${API_VERSION}/rates`);
-      logger.info(`   - /api/${API_VERSION}/webhooks`);
+      console.log(`🚀 FlipCash API server running on port ${PORT}`);
+      console.log(`📍 Environment: ${process.env.NODE_ENV}`);
+      console.log(`🌐 API Base URL: http://localhost:${PORT}/api/${API_VERSION}`);
+      console.log(`✅ Routes registered:`);
+      console.log(`   - /api/${API_VERSION}/auth`);
+      console.log(`   - /api/${API_VERSION}/users`);
+      console.log(`   - /api/${API_VERSION}/wallets`);
+      console.log(`   - /api/${API_VERSION}/transactions`);
+      console.log(`   - /api/${API_VERSION}/rates`);
+      console.log(`   - /api/${API_VERSION}/webhooks`);
+      console.log(`✅ Server is ready!`);
     });
   } catch (error) {
-    logger.error('Failed to start server:', error);
+    console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 };
@@ -83,7 +102,7 @@ startServer();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  logger.info('SIGTERM signal received: closing HTTP server');
+  console.log('SIGTERM signal received: closing HTTP server');
   process.exit(0);
 });
 
