@@ -122,8 +122,8 @@ class MigrationManager {
         const crypto = require('crypto');
         const checksum = crypto.createHash('sha256').update(sql).digest('hex');
         
-        // Wrap in transaction for safety
-        const client = await db.connect();
+        // Wrap in transaction for safety - FIXED: db.getClient() not db.connect()
+        const client = await db.getClient(); // ⚠️ FIXED THIS LINE
         
         try {
           await client.query('BEGIN');
@@ -234,7 +234,8 @@ async function initKycTables() {
   console.log('🔄 Running legacy KYC table initialization...');
   
   try {
-    const client = await db.connect();
+    // FIXED: db.getClient() not db.connect()
+    const client = await db.getClient(); // ⚠️ FIXED THIS LINE
     
     try {
       await client.query('BEGIN');
