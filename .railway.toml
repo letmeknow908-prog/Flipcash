@@ -1,13 +1,6 @@
-# .railway.toml
 [build]
 builder = "nixpacks"
-buildCommand = "npm install && npm run migrate"
+buildCommand = "node force-rebuild.js && npm install"
 
 [deploy]
-startCommand = "node src/server.js"
-healthcheckPath = "/health"
-healthcheckTimeout = 60
-
-[variables]
-NODE_ENV = "production"
-PORT = "5000"
+startCommand = "npm run migrate && npm start"
