@@ -3,8 +3,7 @@ const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const authMiddleware = require('../middleware/auth.middleware');
 
-// All admin routes require authentication
-// TODO: Add admin role check middleware
+console.log('📊 Loading admin routes...');
 
 // Dashboard stats
 router.get('/stats', authMiddleware, adminController.getDashboardStats);
@@ -24,6 +23,6 @@ router.put('/users/:userId/unblock', authMiddleware, adminController.unblockUser
 // Transaction Management
 router.get('/transactions', authMiddleware, adminController.getAllTransactions);
 
-console.log('✅ Admin routes loaded');
+console.log('✅ Admin routes loaded successfully');
 
 module.exports = router;
