@@ -1,12 +1,14 @@
 # .railway.toml
 [build]
 builder = "nixpacks"
+buildCommand = "rm -rf node_modules && npm cache clean --force && npm install"
 
 [deploy]
 startCommand = "npm run migrate && npm start"
 healthcheckPath = "/health"
-healthcheckTimeout = 30
+healthcheckTimeout = 10
 
 [variables]
 NODE_ENV = "production"
 PORT = "5000"
+CACHE_BUSTER = "force_new_build_$(date +%s)"
