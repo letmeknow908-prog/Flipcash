@@ -1,10 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const db = require('../config/db');
 
-// TEMPORARY IN-MEMORY USER STORAGE
-// Replace with your actual database later
-let users = [];
-
+// Register new user
 exports.register = async (req, res) => {
     try {
         const { firstName, lastName, email, phone, password } = req.body;
@@ -18,8 +16,12 @@ exports.register = async (req, res) => {
         }
 
         // Check if user exists
-        const existingUser = users.find(u => u.email === email || u.phone === phone);
-        if (existingUser) {
+        const existingUser = await db.query(
+            'SELECT id FROM users WHERE email = $1 OR phone = $2',
+            [email, phone]
+        );
+
+        if (existingUser.rows.length > 0) {
             return res.status(400).json({
                 status: 'error',
                 message: 'User with this email or phone already exists'
@@ -30,27 +32,25 @@ exports.register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Create user
-        const user = {
-            id: Date.now().toString(),
-            firstName,
-            lastName,
-            email,
-            phone,
-            password: hashedPassword,
-            kycVerified: false,
-            kycStatus: 'not_submitted',
-            createdAt: new Date()
-        };
+        const result = await db.query(
+            `INSERT INTO users (first_name, last_name, email, phone, password)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, first_name, last_name, email, phone, kyc_verified, kyc_status, created_at`,
+            [firstName, lastName, email, phone, hashedPassword]
+        );
 
-        users.push(user);
+        const user = result.rows[0];
 
-        // Remove password from response
-        const { password: _, ...userWithoutPassword } = user;
+        // Create wallets for user
+        await db.query(
+            `INSERT INTO wallets (user_id, currency, balance) VALUES ($1, 'NGN', 0), ($1, 'KSH', 0)`,
+            [user.id]
+        );
 
         res.status(201).json({
             status: 'success',
             message: 'User registered successfully',
-            data: { user: userWithoutPassword }
+            data: { user }
         });
 
     } catch (error) {
@@ -63,6 +63,7 @@ exports.register = async (req, res) => {
     }
 };
 
+// Login user
 exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -76,16 +77,23 @@ exports.login = async (req, res) => {
         }
 
         // Find user
-        const user = users.find(u => u.email === email);
-        if (!user) {
+        const result = await db.query(
+            'SELECT * FROM users WHERE email = $1',
+            [email]
+        );
+
+        if (result.rows.length === 0) {
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid email or password'
             });
         }
 
+        const user = result.rows[0];
+
         // Verify password
         const isPasswordValid = await bcrypt.compare(password, user.password);
+        
         if (!isPasswordValid) {
             return res.status(401).json({
                 status: 'error',
@@ -96,19 +104,27 @@ exports.login = async (req, res) => {
         // Generate token
         const accessToken = jwt.sign(
             { id: user.id, email: user.email },
-            process.env.JWT_SECRET || 'your-secret-key',
+            process.env.JWT_SECRET || 'flipcash-secret-key-2025',
             { expiresIn: '7d' }
         );
 
         // Remove password from response
-        const { password: _, ...userWithoutPassword } = user;
+        delete user.password;
 
         res.status(200).json({
             status: 'success',
             message: 'Login successful',
             data: {
                 accessToken,
-                user: userWithoutPassword
+                user: {
+                    id: user.id,
+                    firstName: user.first_name,
+                    lastName: user.last_name,
+                    email: user.email,
+                    phone: user.phone,
+                    kycVerified: user.kyc_verified,
+                    kycStatus: user.kyc_status
+                }
             }
         });
 
@@ -122,6 +138,7 @@ exports.login = async (req, res) => {
     }
 };
 
+// Forgot password
 exports.forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
@@ -133,9 +150,13 @@ exports.forgotPassword = async (req, res) => {
             });
         }
 
-        // Find user
-        const user = users.find(u => u.email === email);
-        if (!user) {
+        // Check if user exists
+        const result = await db.query(
+            'SELECT id, phone FROM users WHERE email = $1',
+            [email]
+        );
+
+        if (result.rows.length === 0) {
             // Don't reveal if user exists
             return res.status(200).json({
                 status: 'success',
@@ -160,8 +181,5 @@ exports.forgotPassword = async (req, res) => {
         });
     }
 };
-
-// Export users array so other controllers can access it
-exports.users = users;
 
 module.exports = exports;
