@@ -1,6 +1,6 @@
 {
   "name": "flipcash-backend",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "description": "FlipCash Backend API - Complete Production Ready with KYC",
   "main": "src/server.js",
   "scripts": {
@@ -8,7 +8,6 @@
     "dev": "nodemon src/server.js",
     "migrate": "node src/config/init-db.js run",
     "migrate:status": "node src/config/init-db.js status",
-    "dev:migrate": "npm run migrate && npm run dev",
     "test": "echo 'No tests yet' && exit 0"
   },
   "keywords": ["fintech", "currency-exchange", "mobile-money", "kyc", "postgresql"],
