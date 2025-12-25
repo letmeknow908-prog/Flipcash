@@ -10,7 +10,7 @@
     "migrate:status": "node src/config/init-db.js status",
     "migrate:local": "DATABASE_URL=postgresql://postgres:password@localhost:5432/flipcash npm run migrate",
     "dev:migrate": "npm run migrate:local && npm run dev",
-    "test": "echo 'No tests yet' && exit 0"
+    "test": "jest --passWithNoTests"
   },
   "keywords": ["fintech", "currency-exchange", "mobile-money"],
   "author": "FlipCash Team",
@@ -48,7 +48,8 @@
     "lodash": "^4.17.21"
   },
   "devDependencies": {
-    "nodemon": "^3.0.3"
+    "nodemon": "^3.0.3",
+    "jest": "^29.7.0"
   },
   "engines": {
     "node": ">=18.0.0",
