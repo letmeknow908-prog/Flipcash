@@ -1,0 +1,3 @@
+# .railway.toml
+[deploy]
+postDeploy = "psql $DATABASE_URL -f sql/init-kyc.sql"
