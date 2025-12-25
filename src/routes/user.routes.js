@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 
-// Try to load dependencies with error handling
 let kycController;
 let authenticateToken;
 
@@ -25,13 +24,11 @@ try {
     authenticateToken = (req, res, next) => next();
 }
 
-// KYC Routes
 router.post('/kyc', authenticateToken, kycController.submitKYC);
 router.get('/kyc', authenticateToken, kycController.getKYCStatus);
 router.put('/kyc/:userId/approve', authenticateToken, kycController.approveKYC);
 router.put('/kyc/:userId/reject', authenticateToken, kycController.rejectKYC);
 
-// Test route to verify user routes are working
 router.get('/test', (req, res) => {
     res.json({ 
         status: 'success', 
@@ -40,5 +37,4 @@ router.get('/test', (req, res) => {
     });
 });
 
-// CRITICAL: Export the router
 module.exports = router;
