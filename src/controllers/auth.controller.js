@@ -142,16 +142,16 @@ exports.login = async (req, res) => {
         const user = userResult.rows[0];
 
         // Verify password with bcrypt
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        
-        if (!isPasswordValid) {
-            console.log(`❌ Login failed: Invalid password - ${email}`);
-            return res.status(401).json({
-                status: 'error',
-                message: 'Invalid email or password'
-            });
-        }
+// Verify password with bcrypt
+const isPasswordValid = await bcrypt.compare(password, user.password);
 
+if (!isPasswordValid) {
+    console.log(`❌ Login failed: Invalid password - ${email}`);
+    return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
+    });
+}
         // Generate JWT token
         const accessToken = jwt.sign(
             { 
