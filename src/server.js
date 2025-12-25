@@ -8,20 +8,16 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ============ CRITICAL ERROR HANDLING ============
-// Catch unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
   console.error('🚨 UNHANDLED REJECTION at:', promise, 'reason:', reason);
 });
 
-// Catch uncaught exceptions
 process.on('uncaughtException', (error) => {
   console.error('🚨 UNCAUGHT EXCEPTION:', error);
 });
 
 // Middleware
-app.use(helmet({
-  contentSecurityPolicy: false,
-}));
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   credentials: true,
@@ -30,7 +26,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(morgan('combined'));
 
-// Simple health check endpoint
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'success',
@@ -44,7 +40,7 @@ app.get('/health', (req, res) => {
 // API Routes
 const API_VERSION = process.env.API_VERSION || 'v1';
 
-// Try to load route files
+// Try to load route files (optional)
 const routes = [
   { path: '/auth', file: './routes/auth.routes' },
   { path: '/users', file: './routes/user.routes' },
@@ -59,7 +55,8 @@ routes.forEach(route => {
     app.use(`/api/${API_VERSION}${route.path}`, routeModule);
     console.log(`✅ Loaded route: /api/${API_VERSION}${route.path}`);
   } catch (error) {
-    console.log(`⚠️ Route not found: ${route.file} (skipping)`);
+    console.log(`⚠️ Route not found: ${route.file} (skipping) - ${error.message}`);
+    console.error(error.stack); // Log the stack trace
   }
 });
 
@@ -67,7 +64,6 @@ routes.forEach(route => {
 try {
   const rateController = require('./controllers/rate.controller');
   
-  // GET /api/v1/rates - Get exchange rates
   app.get(`/api/${API_VERSION}/rates`, async (req, res, next) => {
     try {
       await rateController.getRates(req, res, next);
@@ -76,7 +72,6 @@ try {
     }
   });
   
-  // GET /api/v1/rates/history - Get rate history
   app.get(`/api/${API_VERSION}/rates/history`, async (req, res, next) => {
     try {
       await rateController.getRateHistory(req, res, next);
@@ -85,7 +80,6 @@ try {
     }
   });
   
-  // POST /api/v1/rates/calculate - Calculate conversion
   app.post(`/api/${API_VERSION}/rates/calculate`, async (req, res, next) => {
     try {
       await rateController.calculateConversion(req, res, next);
@@ -94,7 +88,6 @@ try {
     }
   });
   
-  // POST /api/v1/rates/account/generate - Generate virtual account
   app.post(`/api/${API_VERSION}/rates/account/generate`, async (req, res, next) => {
     try {
       await rateController.generateVirtualAccount(req, res, next);
@@ -108,27 +101,14 @@ try {
   console.log('⚠️ Rate controller not found:', error.message);
 }
 
-// ============ DEFAULT ROUTES ============
+// Default route
 app.get('/', (req, res) => {
   res.json({
     message: 'FlipCash API',
-    version: '4.0.2',
+    version: '4.0.4',
     api: `/api/${API_VERSION}`,
     health: '/health',
     status: 'operational'
-  });
-});
-
-app.get('/api', (req, res) => {
-  res.json({
-    api: {
-      auth: `/api/${API_VERSION}/auth`,
-      users: `/api/${API_VERSION}/users`,
-      wallets: `/api/${API_VERSION}/wallets`,
-      transactions: `/api/${API_VERSION}/transactions`,
-      rates: `/api/${API_VERSION}/rates`,
-      webhooks: `/api/${API_VERSION}/webhooks`
-    }
   });
 });
 
@@ -144,6 +124,7 @@ app.use((req, res, next) => {
 
 app.use((err, req, res, next) => {
   console.error('🚨 Server Error:', err.message);
+  console.error(err.stack);
   
   res.status(err.status || 500).json({
     status: 'error',
@@ -152,7 +133,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ============ GRACEFUL SHUTDOWN ============
+// Graceful shutdown
 let server;
 const gracefulShutdown = (signal) => {
   console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
@@ -164,7 +145,6 @@ const gracefulShutdown = (signal) => {
       process.exit(0);
     });
     
-    // Force shutdown after 8 seconds
     setTimeout(() => {
       console.error('❌ Could not close connections in time, forcing shutdown');
       process.exit(1);
@@ -174,7 +154,6 @@ const gracefulShutdown = (signal) => {
   }
 };
 
-// Listen for termination signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
@@ -185,25 +164,14 @@ const startServer = async () => {
     console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔧 Port: ${PORT}`);
     
-    // Wait a moment to ensure all routes are loaded
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Start HTTP server
     server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 FlipCash API running on port ${PORT}`);
       console.log(`🌐 API Base: http://localhost:${PORT}/api/${API_VERSION}`);
       console.log(`📊 Health: http://localhost:${PORT}/health`);
       console.log('='.repeat(50));
-      console.log('✅ ALL ROUTES LOADED:');
-      console.log(`   • POST /api/${API_VERSION}/users/kyc - Submit KYC`);
-      console.log(`   • GET  /api/${API_VERSION}/users/kyc - Check KYC status`);
-      console.log(`   • GET  /api/${API_VERSION}/rates - Get exchange rates`);
-      console.log(`   • GET  /api/${API_VERSION}/wallets - Get wallet balances`);
-      console.log('='.repeat(50));
       console.log('✅ Server ready and stable!');
     });
     
-    // Handle server errors
     server.on('error', (error) => {
       console.error('❌ Server error:', error);
       if (error.code === 'EADDRINUSE') {
@@ -220,13 +188,11 @@ const startServer = async () => {
   }
 };
 
-// Export for testing
-module.exports = { app, startServer };
-
-// Start the server if this file is run directly
 if (require.main === module) {
   startServer().catch(error => {
     console.error('❌ Server startup failed:', error);
     process.exit(1);
   });
 }
+
+module.exports = { app, startServer };
