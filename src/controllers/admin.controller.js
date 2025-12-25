@@ -513,4 +513,5 @@ exports.getAllTransactions = async (req, res) => {
     }
 };
 
-module.exports = exports;
+// DO NOT USE module.exports = exports; 
+// Just leave it as is - Node.js will handle it correctly
