@@ -1,3 +1,4 @@
+// src/routes/rate.routes.js
 const express = require('express');
 const router = express.Router();
 const rateController = require('../controllers/rate.controller');
@@ -26,7 +27,7 @@ router.post('/calculate', rateController.calculateConversion);
 /**
  * @route   POST /api/v1/rates/account/generate
  * @desc    Generate virtual account for user
- * @access  Public (TODO: add authentication)
+ * @access  Private (TODO: add authentication)
  */
 router.post('/account/generate', rateController.generateVirtualAccount);
 
