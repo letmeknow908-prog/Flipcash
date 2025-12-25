@@ -1,10 +1,37 @@
-// src/middleware/auth.middleware.js
 const jwt = require('jsonwebtoken');
 
-const authenticateToken = (req, res, next) => {
-  // For now, just pass through for testing
-  // TODO: Implement proper JWT authentication
-  next();
+exports.authenticateToken = (req, res, next) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+        if (!token) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Access token required'
+            });
+        }
+
+        jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
+            if (err) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Invalid or expired token'
+                });
+            }
+
+            req.user = user;
+            next();
+        });
+
+    } catch (error) {
+        console.error('Authentication error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Authentication failed',
+            error: error.message
+        });
+    }
 };
 
-module.exports = { authenticateToken };
+module.exports = exports;
