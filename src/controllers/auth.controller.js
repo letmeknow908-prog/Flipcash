@@ -62,7 +62,7 @@ exports.register = async (req, res) => {
         );
 
         const newUser = userResult.rows[0];
-
+        
         // Create default wallets (NGN and KSH)
         try {
             await db.query(
@@ -154,6 +154,7 @@ exports.login = async (req, res) => {
 
         // Generate JWT token
         const accessToken = jwt.sign(
+        const accessToken = jwt.sign({ id, email }, JWT_SECRET, { expiresIn: '7d' });
             { 
                 id: user.id, 
                 email: user.email 
