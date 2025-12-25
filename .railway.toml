@@ -1,6 +1,14 @@
+# .railway.toml
 [build]
 builder = "nixpacks"
-buildCommand = "node force-rebuild.js && npm install"
+buildCommand = "bash .railway/setup.sh && npm install"
 
 [deploy]
 startCommand = "npm run migrate && npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+
+[variables]
+NODE_ENV = "production"
+PORT = "5000"
+FORCE_REBUILD = "true"  # Add this
