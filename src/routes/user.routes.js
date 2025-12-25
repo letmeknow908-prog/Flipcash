@@ -1,4 +1,3 @@
-// src/routes/user.routes.js
 const express = require('express');
 const router = express.Router();
 const kycController = require('../controllers/kyc.controller');
