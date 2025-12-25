@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const { Pool } = require('pg'); // Added PostgreSQL
+const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 5000;
 const db = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20, // Maximum number of clients in the pool
+  max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
@@ -79,86 +79,56 @@ const runKYCDatabaseMigrations = async () => {
       -- Add KYC columns to users table if they don't exist
       DO $$ 
       BEGIN 
-        -- Check and add kyc_status column
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                       WHERE table_name='users' AND column_name='kyc_status') THEN
           ALTER TABLE users ADD COLUMN kyc_status VARCHAR(20) DEFAULT 'not_submitted';
-          RAISE NOTICE 'Added kyc_status column to users table';
         END IF;
         
-        -- Check and add kyc_submitted_at column
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                       WHERE table_name='users' AND column_name='kyc_submitted_at') THEN
           ALTER TABLE users ADD COLUMN kyc_submitted_at TIMESTAMP;
-          RAISE NOTICE 'Added kyc_submitted_at column to users table';
         END IF;
         
-        -- Check and add kyc_verified_at column
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                       WHERE table_name='users' AND column_name='kyc_verified_at') THEN
           ALTER TABLE users ADD COLUMN kyc_verified_at TIMESTAMP;
-          RAISE NOTICE 'Added kyc_verified_at column to users table';
         END IF;
         
-        -- Check and add kyc_rejection_reason column
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                       WHERE table_name='users' AND column_name='kyc_rejection_reason') THEN
           ALTER TABLE users ADD COLUMN kyc_rejection_reason TEXT;
-          RAISE NOTICE 'Added kyc_rejection_reason column to users table';
         END IF;
         
-        -- Check and add tier_level column
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                       WHERE table_name='users' AND column_name='tier_level') THEN
           ALTER TABLE users ADD COLUMN tier_level VARCHAR(20) DEFAULT 'basic';
-          RAISE NOTICE 'Added tier_level column to users table';
         END IF;
         
-        -- Check and add full_name column
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                       WHERE table_name='users' AND column_name='full_name') THEN
           ALTER TABLE users ADD COLUMN full_name VARCHAR(100);
-          RAISE NOTICE 'Added full_name column to users table';
         END IF;
         
-        -- Check and add date_of_birth column
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                       WHERE table_name='users' AND column_name='date_of_birth') THEN
           ALTER TABLE users ADD COLUMN date_of_birth DATE;
-          RAISE NOTICE 'Added date_of_birth column to users table';
         END IF;
         
-        -- Check and add bvn column
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                       WHERE table_name='users' AND column_name='bvn') THEN
           ALTER TABLE users ADD COLUMN bvn VARCHAR(11);
-          RAISE NOTICE 'Added bvn column to users table';
         END IF;
         
-        -- Check and add kyc_verified column
         IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                       WHERE table_name='users' AND column_name='kyc_verified') THEN
           ALTER TABLE users ADD COLUMN kyc_verified BOOLEAN DEFAULT false;
-          RAISE NOTICE 'Added kyc_verified column to users table';
         END IF;
-        
       END $$;
     `;
     
     // Execute migration
     await db.query(migrationSQL);
     console.log('✅ KYC database migrations completed successfully');
-    
-    // Verify the migration
-    const verifyQuery = `
-      SELECT 
-        (SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'kyc_submissions')) as kyc_table_exists,
-        (SELECT COUNT(*) FROM kyc_submissions) as kyc_submission_count;
-    `;
-    
-    const verifyResult = await db.query(verifyQuery);
-    console.log(`📊 KYC Table Status: ${verifyResult.rows[0].kyc_table_exists ? 'Exists' : 'Missing'}`);
-    console.log(`📊 KYC Submissions: ${verifyResult.rows[0].kyc_submission_count} records`);
     
   } catch (error) {
     // Check if error is because table already exists (common and safe to ignore)
@@ -204,25 +174,6 @@ app.get('/health', async (req, res) => {
       database: 'disconnected',
       error: error.message
     });
-  }
-});
-
-// Database status endpoint
-app.get('/api/status/db', async (req, res) => {
-  try {
-    const result = await db.query('SELECT version(), current_timestamp');
-    res.json({
-      status: 'connected',
-      postgresVersion: result.rows[0].version,
-      serverTime: result.rows[0].current_timestamp,
-      poolStats: db.totalCount ? {
-        totalConnections: db.totalCount,
-        idleConnections: db.idleCount,
-        waitingClients: db.waitingCount
-      } : 'Not available'
-    });
-  } catch (error) {
-    res.status(500).json({ status: 'disconnected', error: error.message });
   }
 });
 
@@ -323,7 +274,6 @@ const startServer = async () => {
   try {
     console.log('🚀 Starting FlipCash API server...');
     console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔧 Database URL: ${process.env.DATABASE_URL ? 'Set' : 'Not set'}`);
     
     // Run KYC database migrations first
     await runKYCDatabaseMigrations();
@@ -359,66 +309,23 @@ const startServer = async () => {
       console.log('ℹ️ Redis not available or failed to connect (continuing)');
     }
     
-    // Test database connection before starting server
-    try {
-      await db.query('SELECT NOW()');
-      console.log('✅ Database connection test successful');
-    } catch (dbError) {
-      console.error('❌ Database connection failed:', dbError.message);
-      console.log('⚠️ Server will start without database connection');
-    }
-    
     // Start server
     const server = app.listen(PORT, () => {
       console.log(`🚀 FlipCash API running on port ${PORT}`);
       console.log(`🌐 API Base URL: http://localhost:${PORT}/api/${API_VERSION}`);
       console.log(`📊 Health Check: http://localhost:${PORT}/health`);
-      console.log(`📊 Database Status: http://localhost:${PORT}/api/status/db`);
       console.log(`✅ Server ready!`);
-      console.log('='.repeat(50));
-      console.log('🔄 KYC Features:');
-      console.log('  • POST /api/v1/users/kyc - Submit KYC');
-      console.log('  • GET  /api/v1/users/kyc - Get KYC Status');
-      console.log('='.repeat(50));
     });
     
     // Handle graceful shutdown
     const gracefulShutdown = async () => {
       console.log('\n🛑 Received shutdown signal, closing server...');
-      
-      server.close(async () => {
-        console.log('✅ HTTP server closed');
-        
-        // Close database connections
-        try {
-          await db.end();
-          console.log('✅ Database connections closed');
-        } catch (dbError) {
-          console.error('❌ Error closing database:', dbError);
-        }
-        
-        // Close Redis if exists
-        if (app.get('redis')) {
-          try {
-            await app.get('redis').quit();
-            console.log('✅ Redis connection closed');
-          } catch (redisError) {
-            console.error('❌ Error closing Redis:', redisError);
-          }
-        }
-        
-        console.log('👋 Server shutdown complete');
+      server.close(() => {
+        console.log('✅ Server closed');
         process.exit(0);
       });
-      
-      // Force shutdown after 10 seconds
-      setTimeout(() => {
-        console.error('❌ Could not close connections in time, forcing shutdown');
-        process.exit(1);
-      }, 10000);
     };
     
-    // Listen for termination signals
     process.on('SIGTERM', gracefulShutdown);
     process.on('SIGINT', gracefulShutdown);
     
@@ -430,10 +337,4 @@ const startServer = async () => {
   }
 };
 
-// Export for testing
-module.exports = { app, startServer, db };
-
-// Start the server if this file is run directly
-if (require.main === module) {
-  startServer();
-}
+startServer();
