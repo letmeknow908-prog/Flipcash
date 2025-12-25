@@ -1,3 +1,16 @@
 # .railway.toml
+[build]
+builder = "nixpacks"
+buildCommand = "npm install"
+
 [deploy]
-postDeploy = "psql $DATABASE_URL -f sql/init-kyc.sql"
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+
+[variables]
+NODE_ENV = "production"
+PORT = "3000"
+
+[deploy.hooks]
+postDeploy = "node -e \"require('./src/config/init-db').runMigrations().catch(() => console.log('Migrations may have already run'))\""
