@@ -1,11 +1,11 @@
 const db = require('../../config/db');
 
-console.log('🎯 ADMIN CONTROLLER LOADED - NEW VERSION'); // ← ADD THIS LINE
+console.log('🎯 ADMIN CONTROLLER LOADED - ABSOLUTE FINAL VERSION');
 
 /**
  * Get Dashboard Stats
  */
-exports.getDashboardStats = async (req, res) => {
+const getDashboardStats = async (req, res) => {
     try {
         // Total users
         const usersResult = await db.query('SELECT COUNT(*) as count FROM users');
@@ -21,7 +21,7 @@ exports.getDashboardStats = async (req, res) => {
         const transactionsResult = await db.query('SELECT COUNT(*) as count FROM transactions');
         const totalTransactions = transactionsResult.rows[0].count;
 
-        // Total revenue (sum of fees - 1% of completed transactions)
+        // Total revenue
         const revenueResult = await db.query(
             "SELECT SUM(amount * 0.01) as revenue FROM transactions WHERE status = 'completed' AND type IN ('swap', 'withdraw')"
         );
@@ -52,7 +52,7 @@ exports.getDashboardStats = async (req, res) => {
 /**
  * Get All KYC Submissions
  */
-exports.getAllKYC = async (req, res) => {
+const getAllKYC = async (req, res) => {
     try {
         const { status } = req.query;
 
@@ -107,10 +107,7 @@ exports.getAllKYC = async (req, res) => {
     }
 };
 
-/**
- * Get KYC Details
- */
-exports.getKYCDetails = async (req, res) => {
+const getKYCDetails = async (req, res) => {
     try {
         const { userId } = req.params;
 
@@ -146,8 +143,6 @@ exports.getKYCDetails = async (req, res) => {
             });
         }
 
-        console.log(`✅ Loaded KYC details for user ${userId}`);
-
         res.status(200).json({
             status: 'success',
             data: result.rows[0]
@@ -163,15 +158,11 @@ exports.getKYCDetails = async (req, res) => {
     }
 };
 
-/**
- * Approve KYC
- */
-exports.approveKYC = async (req, res) => {
+const approveKYC = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        // Check if user exists
-        const userCheck = await db.query('SELECT id, kyc_status FROM users WHERE id = $1', [userId]);
+        const userCheck = await db.query('SELECT id FROM users WHERE id = $1', [userId]);
         
         if (userCheck.rows.length === 0) {
             return res.status(404).json({
@@ -180,19 +171,13 @@ exports.approveKYC = async (req, res) => {
             });
         }
 
-        // Update user status
         await db.query(
-            `UPDATE users 
-             SET kyc_status = 'approved', kyc_verified = TRUE 
-             WHERE id = $1`,
+            `UPDATE users SET kyc_status = 'approved', kyc_verified = TRUE WHERE id = $1`,
             [userId]
         );
 
-        // Update KYC data
         await db.query(
-            `UPDATE kyc_data 
-             SET kyc_approved_at = CURRENT_TIMESTAMP 
-             WHERE user_id = $1`,
+            `UPDATE kyc_data SET kyc_approved_at = CURRENT_TIMESTAMP WHERE user_id = $1`,
             [userId]
         );
 
@@ -213,10 +198,7 @@ exports.approveKYC = async (req, res) => {
     }
 };
 
-/**
- * Reject KYC
- */
-exports.rejectKYC = async (req, res) => {
+const rejectKYC = async (req, res) => {
     try {
         const { userId } = req.params;
         const { reason } = req.body;
@@ -228,7 +210,6 @@ exports.rejectKYC = async (req, res) => {
             });
         }
 
-        // Check if user exists
         const userCheck = await db.query('SELECT id FROM users WHERE id = $1', [userId]);
         
         if (userCheck.rows.length === 0) {
@@ -238,23 +219,17 @@ exports.rejectKYC = async (req, res) => {
             });
         }
 
-        // Update user status
         await db.query(
-            `UPDATE users 
-             SET kyc_status = 'rejected', kyc_verified = FALSE 
-             WHERE id = $1`,
+            `UPDATE users SET kyc_status = 'rejected', kyc_verified = FALSE WHERE id = $1`,
             [userId]
         );
 
-        // Update KYC data with rejection reason
         await db.query(
-            `UPDATE kyc_data 
-             SET kyc_rejection_reason = $1 
-             WHERE user_id = $2`,
+            `UPDATE kyc_data SET kyc_rejection_reason = $1 WHERE user_id = $2`,
             [reason, userId]
         );
 
-        console.log(`❌ KYC rejected for user ${userId}: ${reason}`);
+        console.log(`❌ KYC rejected for user ${userId}`);
 
         res.status(200).json({
             status: 'success',
@@ -271,10 +246,7 @@ exports.rejectKYC = async (req, res) => {
     }
 };
 
-/**
- * Get All Users
- */
-exports.getAllUsers = async (req, res) => {
+const getAllUsers = async (req, res) => {
     try {
         const { search, kycStatus } = req.query;
 
@@ -329,20 +301,13 @@ exports.getAllUsers = async (req, res) => {
     }
 };
 
-/**
- * Get User Details
- */
-exports.getUserDetails = async (req, res) => {
+const getUserDetails = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        // Get user info
         const userResult = await db.query(
-            `SELECT 
-                id, first_name, last_name, email, phone, 
-                kyc_verified, kyc_status, created_at
-            FROM users 
-            WHERE id = $1`,
+            `SELECT id, first_name, last_name, email, phone, kyc_verified, kyc_status, created_at
+            FROM users WHERE id = $1`,
             [userId]
         );
 
@@ -355,22 +320,15 @@ exports.getUserDetails = async (req, res) => {
 
         const user = userResult.rows[0];
 
-        // Get wallets
         const walletsResult = await db.query(
             'SELECT currency, balance FROM wallets WHERE user_id = $1',
             [userId]
         );
 
-        // Get recent transactions
         const transactionsResult = await db.query(
-            `SELECT * FROM transactions 
-             WHERE user_id = $1 
-             ORDER BY created_at DESC 
-             LIMIT 10`,
+            `SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`,
             [userId]
         );
-
-        console.log(`✅ Loaded details for user ${userId}`);
 
         res.status(200).json({
             status: 'success',
@@ -391,23 +349,12 @@ exports.getUserDetails = async (req, res) => {
     }
 };
 
-/**
- * Block User
- */
-exports.blockUser = async (req, res) => {
+const blockUser = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        // Add blocked column if it doesn't exist
-        await db.query(`
-            ALTER TABLE users 
-            ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE
-        `);
-
-        await db.query(
-            'UPDATE users SET blocked = TRUE WHERE id = $1',
-            [userId]
-        );
+        await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked BOOLEAN DEFAULT FALSE`);
+        await db.query('UPDATE users SET blocked = TRUE WHERE id = $1', [userId]);
 
         console.log(`🚫 User ${userId} blocked`);
 
@@ -426,17 +373,11 @@ exports.blockUser = async (req, res) => {
     }
 };
 
-/**
- * Unblock User
- */
-exports.unblockUser = async (req, res) => {
+const unblockUser = async (req, res) => {
     try {
         const { userId } = req.params;
 
-        await db.query(
-            'UPDATE users SET blocked = FALSE WHERE id = $1',
-            [userId]
-        );
+        await db.query('UPDATE users SET blocked = FALSE WHERE id = $1', [userId]);
 
         console.log(`✅ User ${userId} unblocked`);
 
@@ -455,10 +396,7 @@ exports.unblockUser = async (req, res) => {
     }
 };
 
-/**
- * Get All Transactions
- */
-exports.getAllTransactions = async (req, res) => {
+const getAllTransactions = async (req, res) => {
     try {
         const { type, status, search } = req.query;
 
@@ -515,5 +453,16 @@ exports.getAllTransactions = async (req, res) => {
     }
 };
 
-// DO NOT USE module.exports = exports; 
-// Just leave it as is - Node.js will handle it correctly
+// Export using module.exports with explicit function references
+module.exports = {
+    getDashboardStats,
+    getAllKYC,
+    getKYCDetails,
+    approveKYC,
+    rejectKYC,
+    getAllUsers,
+    getUserDetails,
+    blockUser,
+    unblockUser,
+    getAllTransactions
+};
