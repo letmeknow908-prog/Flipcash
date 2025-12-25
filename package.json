@@ -1,7 +1,7 @@
 {
   "name": "flipcash-backend",
-  "version": "1.0.0",
-  "description": "FlipCash Backend API - Complete Production Ready",
+  "version": "2.0.0",
+  "description": "FlipCash Backend API - Complete Production Ready with KYC",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -10,7 +10,7 @@
     "migrate:status": "node src/config/init-db.js status",
     "test": "echo 'No tests yet' && exit 0"
   },
-  "keywords": ["fintech", "currency-exchange", "mobile-money"],
+  "keywords": ["fintech", "currency-exchange", "mobile-money", "kyc", "postgresql"],
   "author": "FlipCash Team",
   "license": "MIT",
   "dependencies": {
