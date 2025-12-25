@@ -1,16 +1,16 @@
 # .railway.toml
 [build]
 builder = "nixpacks"
-buildCommand = "npm install"
 
 [deploy]
-startCommand = "npm start"
+startCommand = "npm run migrate && npm start"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 
 [variables]
 NODE_ENV = "production"
-PORT = "3000"
+PORT = "5000"
 
 [deploy.hooks]
-postDeploy = "node -e \"require('./src/config/init-db').runMigrations().catch(() => console.log('Migrations may have already run'))\""
+# Optional: preDeploy hook if you want to run migrations before server starts
+preDeploy = "echo 'Running database migrations...'"
