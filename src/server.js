@@ -27,7 +27,6 @@ app.get('/health', (req, res) => {
 // Load routes - FIX THE PATHS HERE
 console.log('🚀 Starting FlipCash API server...');
 
-// Try to load each route and log results
 const routes = [
     { name: '/api/v1/auth', path: './routes/auth.routes' },
     { name: '/api/v1/users', path: './routes/user.routes' },
@@ -36,7 +35,6 @@ const routes = [
     { name: '/api/v1/webhooks', path: './routes/webhook.routes' },
     { name: '/api/v1/admin', path: './routes/admin.routes' }  // ← ADD THIS
 ];
-
 
 routes.forEach(route => {
     try {
