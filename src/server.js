@@ -35,11 +35,14 @@ const routes = [
 
 routes.forEach(route => {
     try {
+        console.log(`🔍 Attempting to load: ${route.path}`);
         const router = require(route.path);
         app.use(route.name, router);
         console.log(`✅ Loaded route: ${route.name}`);
     } catch (error) {
-        console.log(`⚠️ Route not found: ${route.path} (skipping)`);
+        console.log(`❌ FAILED to load ${route.path}:`);
+        console.log(`   Error: ${error.message}`);
+        console.log(`   Stack: ${error.stack}`);
     }
 });
 
