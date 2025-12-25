@@ -154,7 +154,6 @@ exports.login = async (req, res) => {
 
         // Generate JWT token
         const accessToken = jwt.sign(
-        const accessToken = jwt.sign({ id, email }, JWT_SECRET, { expiresIn: '7d' });
             { 
                 id: user.id, 
                 email: user.email 
