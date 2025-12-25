@@ -1,4 +1,3 @@
-// config/database.js
 const { Pool } = require('pg');
 
 const pool = new Pool({
@@ -21,5 +20,5 @@ module.exports = {
   query: (text, params) => pool.query(text, params),
   getClient: () => pool.connect(),
   end: () => pool.end(),
-  pool, // Export pool for transactions
+  pool,
 };
