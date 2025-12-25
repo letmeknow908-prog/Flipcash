@@ -6,8 +6,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "migrate": "psql $DATABASE_URL -f sql/init-kyc.sql",
-    "migrate:local": "psql postgresql://username:password@localhost/flipcash -f sql/init-kyc.sql",
+    "migrate": "node src/config/init-db.js run",
+    "migrate:status": "node src/config/init-db.js status",
+    "migrate:local": "DATABASE_URL=postgresql://postgres:password@localhost:5432/flipcash npm run migrate",
     "dev:migrate": "npm run migrate:local && npm run dev",
     "test": "echo 'No tests yet' && exit 0"
   },
