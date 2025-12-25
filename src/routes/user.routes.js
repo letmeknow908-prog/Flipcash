@@ -9,4 +9,5 @@ router.get('/kyc', authenticateToken, kycController.getKYCStatus);
 router.put('/kyc/:userId/approve', authenticateToken, kycController.approveKYC);
 router.put('/kyc/:userId/reject', authenticateToken, kycController.rejectKYC);
 
+// Export the router - THIS IS CRITICAL!
 module.exports = router;
