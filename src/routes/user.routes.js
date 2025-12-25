@@ -1,24 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const kycController = require('../controllers/kyc.controller');
+const { authenticateToken } = require('../middleware/auth.middleware');
 
-// Test route
-router.get('/test', (req, res) => {
-  res.json({ message: 'User routes working!' });
-});
-
-// KYC placeholder
-router.post('/kyc', (req, res) => {
-  res.json({ 
-    message: 'KYC endpoint ready', 
-    status: 'will be implemented' 
-  });
-});
-
-router.get('/kyc', (req, res) => {
-  res.json({ 
-    message: 'Get KYC status endpoint', 
-    status: 'working' 
-  });
-});
+// KYC Routes
+router.post('/kyc', authenticateToken, kycController.submitKYC);
+router.get('/kyc', authenticateToken, kycController.getKYCStatus);
+router.put('/kyc/:userId/approve', authenticateToken, kycController.approveKYC);
+router.put('/kyc/:userId/reject', authenticateToken, kycController.rejectKYC);
 
 module.exports = router;
