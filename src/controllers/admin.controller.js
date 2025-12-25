@@ -1,5 +1,7 @@
 const db = require('../../config/db');
 
+console.log('🎯 ADMIN CONTROLLER LOADED - NEW VERSION'); // ← ADD THIS LINE
+
 /**
  * Get Dashboard Stats
  */
