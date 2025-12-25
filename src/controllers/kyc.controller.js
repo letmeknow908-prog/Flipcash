@@ -1,4 +1,4 @@
-const db = require('../config/db');
+const db = require('../../config/db');
 
 // Submit KYC
 exports.submitKYC = async (req, res) => {
@@ -56,6 +56,8 @@ exports.submitKYC = async (req, res) => {
             [userId]
         );
 
+        console.log(`✅ KYC submitted for user ${userId}`);
+
         res.status(200).json({
             status: 'success',
             message: 'KYC submitted successfully. Verification under review.',
@@ -66,7 +68,7 @@ exports.submitKYC = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('KYC submission error:', error);
+        console.error('❌ KYC submission error:', error);
         res.status(500).json({
             status: 'error',
             message: 'Failed to submit KYC',
@@ -119,7 +121,7 @@ exports.getKYCStatus = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Get KYC status error:', error);
+        console.error('❌ Get KYC status error:', error);
         res.status(500).json({
             status: 'error',
             message: 'Failed to get KYC status',
@@ -143,13 +145,15 @@ exports.approveKYC = async (req, res) => {
             [userId]
         );
 
+        console.log(`✅ KYC approved for user ${userId}`);
+
         res.status(200).json({
             status: 'success',
             message: 'KYC approved successfully'
         });
 
     } catch (error) {
-        console.error('KYC approval error:', error);
+        console.error('❌ KYC approval error:', error);
         res.status(500).json({
             status: 'error',
             message: 'Failed to approve KYC',
@@ -174,13 +178,15 @@ exports.rejectKYC = async (req, res) => {
             [reason, userId]
         );
 
+        console.log(`❌ KYC rejected for user ${userId}`);
+
         res.status(200).json({
             status: 'success',
             message: 'KYC rejected'
         });
 
     } catch (error) {
-        console.error('KYC rejection error:', error);
+        console.error('❌ KYC rejection error:', error);
         res.status(500).json({
             status: 'error',
             message: 'Failed to reject KYC',
