@@ -150,3 +150,4 @@ exports.rejectKYC = async (req, res) => {
 };
 
 module.exports = exports;
+
