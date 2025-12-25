@@ -1,7 +1,13 @@
--- FlipCash Database Schema
+-- FlipCash Database Schema - FIXED FOR UUID
 
--- Users table
-CREATE TABLE IF NOT EXISTS users (
+-- Drop existing tables if they exist (careful in production!)
+DROP TABLE IF EXISTS transactions CASCADE;
+DROP TABLE IF EXISTS wallets CASCADE;
+DROP TABLE IF EXISTS kyc_data CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+-- Users table with UUID
+CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
@@ -15,7 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- KYC data table
-CREATE TABLE IF NOT EXISTS kyc_data (
+CREATE TABLE kyc_data (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     fullname VARCHAR(255),
@@ -32,7 +38,7 @@ CREATE TABLE IF NOT EXISTS kyc_data (
 );
 
 -- Wallets table
-CREATE TABLE IF NOT EXISTS wallets (
+CREATE TABLE wallets (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     currency VARCHAR(3) NOT NULL,
@@ -43,7 +49,7 @@ CREATE TABLE IF NOT EXISTS wallets (
 );
 
 -- Transactions table
-CREATE TABLE IF NOT EXISTS transactions (
+CREATE TABLE transactions (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     type VARCHAR(20) NOT NULL,
@@ -57,11 +63,11 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 -- Indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
-CREATE INDEX IF NOT EXISTS idx_wallets_user_id ON wallets(user_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_kyc_data_user_id ON kyc_data(user_id);
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_phone ON users(phone);
+CREATE INDEX idx_wallets_user_id ON wallets(user_id);
+CREATE INDEX idx_transactions_user_id ON transactions(user_id);
+CREATE INDEX idx_kyc_data_user_id ON kyc_data(user_id);
 
 -- Update timestamp function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
