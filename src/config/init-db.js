@@ -1,74 +1,98 @@
-// src/config/init-db.js
 const db = require('./database');
 
 async function initKycTables() {
     try {
         console.log('Initializing KYC tables...');
         
-        // Create kyc_submissions table
-        await db.query(`
-            CREATE TABLE IF NOT EXISTS kyc_submissions (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                reference_id VARCHAR(50) UNIQUE NOT NULL,
-                fullname VARCHAR(100) NOT NULL,
-                dob DATE NOT NULL,
-                address TEXT NOT NULL,
-                id_type VARCHAR(20) NOT NULL,
-                id_number VARCHAR(50) NOT NULL,
-                bvn VARCHAR(11) NOT NULL,
-                country VARCHAR(2) NOT NULL,
-                occupation VARCHAR(100) NOT NULL,
-                source_funds VARCHAR(20) NOT NULL,
-                status VARCHAR(20) DEFAULT 'pending',
-                submitted_at TIMESTAMP DEFAULT NOW(),
-                reviewed_at TIMESTAMP,
-                reviewer_id INTEGER REFERENCES users(id),
-                rejection_reason TEXT,
-                email VARCHAR(255),
-                is_bvn_verified BOOLEAN DEFAULT false,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
-            );
-        `);
+        // We'll wrap the table creation and index creation in a transaction
+        const client = await db.connect();
+        
+        try {
+            await client.query('BEGIN');
 
-        // Create index for faster queries
-        await db.query('CREATE INDEX IF NOT EXISTS idx_kyc_user_id ON kyc_submissions(user_id);');
-        await db.query('CREATE INDEX IF NOT EXISTS idx_kyc_status ON kyc_submissions(status);');
-        await db.query('CREATE INDEX IF NOT EXISTS idx_kyc_submitted_at ON kyc_submissions(submitted_at);');
+            // Create kyc_submissions table
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS kyc_submissions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    reference_id VARCHAR(50) UNIQUE NOT NULL,
+                    fullname VARCHAR(100) NOT NULL,
+                    dob DATE NOT NULL,
+                    address TEXT NOT NULL,
+                    id_type VARCHAR(20) NOT NULL,
+                    id_number VARCHAR(50) NOT NULL,
+                    bvn VARCHAR(11) NOT NULL,
+                    country VARCHAR(2) NOT NULL,
+                    occupation VARCHAR(100) NOT NULL,
+                    source_funds VARCHAR(20) NOT NULL,
+                    status VARCHAR(20) DEFAULT 'pending',
+                    submitted_at TIMESTAMP DEFAULT NOW(),
+                    reviewed_at TIMESTAMP,
+                    reviewer_id INTEGER REFERENCES users(id),
+                    rejection_reason TEXT,
+                    email VARCHAR(255),
+                    is_bvn_verified BOOLEAN DEFAULT false,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                );
+            `);
 
-        // Add KYC columns to users table if they don't exist
-        // We'll do this by checking each column and adding if missing
-        // Since PostgreSQL doesn't have a simple way to do this in one command, we use multiple ALTER TABLE statements with IF NOT EXISTS (but note: PostgreSQL doesn't support IF NOT EXISTS for columns in all versions)
-        // Instead, we can use a DO block as in the original SQL, but note that the DO block cannot be run in a transaction from the node-pg client? Actually it can.
-        // Alternatively, we can use the following method for each column:
+            // Create index for faster queries
+            await client.query('CREATE INDEX IF NOT EXISTS idx_kyc_user_id ON kyc_submissions(user_id);');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_kyc_status ON kyc_submissions(status);');
+            await client.query('CREATE INDEX IF NOT EXISTS idx_kyc_submitted_at ON kyc_submissions(submitted_at);');
 
-        const columnsToAdd = [
-            { name: 'kyc_status', type: 'VARCHAR(20) DEFAULT \'not_submitted\'' },
-            { name: 'kyc_submitted_at', type: 'TIMESTAMP' },
-            { name: 'kyc_verified_at', type: 'TIMESTAMP' },
-            { name: 'kyc_rejection_reason', type: 'TEXT' },
-            { name: 'tier_level', type: 'VARCHAR(20) DEFAULT \'basic\'' },
-            { name: 'full_name', type: 'VARCHAR(100)' },
-            { name: 'date_of_birth', type: 'DATE' }
-        ];
+            // Add KYC columns to users table if they don't exist
+            // We use a DO block to conditionally add columns
+            await client.query(`
+                DO $$ 
+                BEGIN 
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='users' AND column_name='kyc_status') THEN
+                        ALTER TABLE users ADD COLUMN kyc_status VARCHAR(20) DEFAULT 'not_submitted';
+                    END IF;
+                    
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='users' AND column_name='kyc_submitted_at') THEN
+                        ALTER TABLE users ADD COLUMN kyc_submitted_at TIMESTAMP;
+                    END IF;
+                    
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='users' AND column_name='kyc_verified_at') THEN
+                        ALTER TABLE users ADD COLUMN kyc_verified_at TIMESTAMP;
+                    END IF;
+                    
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='users' AND column_name='kyc_rejection_reason') THEN
+                        ALTER TABLE users ADD COLUMN kyc_rejection_reason TEXT;
+                    END IF;
+                    
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='users' AND column_name='tier_level') THEN
+                        ALTER TABLE users ADD COLUMN tier_level VARCHAR(20) DEFAULT 'basic';
+                    END IF;
+                    
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='users' AND column_name='full_name') THEN
+                        ALTER TABLE users ADD COLUMN full_name VARCHAR(100);
+                    END IF;
+                    
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                                   WHERE table_name='users' AND column_name='date_of_birth') THEN
+                        ALTER TABLE users ADD COLUMN date_of_birth DATE;
+                    END IF;
+                END $$;
+            `);
 
-        for (const column of columnsToAdd) {
-            // Check if the column exists
-            const checkQuery = `
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name='users' AND column_name='${column.name}';
-            `;
-            const result = await db.query(checkQuery);
-            if (result.rows.length === 0) {
-                // Column doesn't exist, add it
-                await db.query(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type};`);
-                console.log(`Added column ${column.name} to users table.`);
-            }
+            await client.query('COMMIT');
+            console.log('KYC tables initialized successfully.');
+        } catch (error) {
+            await client.query('ROLLBACK');
+            console.error('Error in KYC tables initialization transaction:', error);
+            throw error;
+        } finally {
+            client.release();
         }
-
-        console.log('KYC tables initialized successfully.');
     } catch (error) {
         console.error('Error initializing KYC tables:', error);
         // We don't want to crash the server if the tables already exist, but if there's a connection issue, we might want to retry.
