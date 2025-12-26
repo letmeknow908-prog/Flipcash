@@ -1,28 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
-const authMiddleware = require('../middleware/auth.middleware');
+const adminMiddleware = require('../middleware/admin.middleware');  // Use admin middleware!
 
 console.log('📊 Loading admin routes...');
 
 // Dashboard stats
-router.get('/stats', authMiddleware, adminController.getDashboardStats);
+router.get('/stats', adminMiddleware, adminController.getDashboardStats);
 
 // KYC Management
-router.get('/kyc', authMiddleware, adminController.getAllKYC);
-router.get('/kyc/:userId', authMiddleware, adminController.getKYCDetails);
-router.put('/kyc/:userId/approve', authMiddleware, adminController.approveKYC);
-router.put('/kyc/:userId/reject', authMiddleware, adminController.rejectKYC);
+router.get('/kyc', adminMiddleware, adminController.getAllKYC);
+router.get('/kyc/:userId', adminMiddleware, adminController.getKYCDetails);
+router.put('/kyc/:userId/approve', adminMiddleware, adminController.approveKYC);
+router.put('/kyc/:userId/reject', adminMiddleware, adminController.rejectKYC);
 
 // User Management
-router.get('/users', authMiddleware, adminController.getAllUsers);
-router.get('/users/:userId', authMiddleware, adminController.getUserDetails);
-router.put('/users/:userId/block', authMiddleware, adminController.blockUser);
-router.put('/users/:userId/unblock', authMiddleware, adminController.unblockUser);
+router.get('/users', adminMiddleware, adminController.getAllUsers);
+router.get('/users/:userId', adminMiddleware, adminController.getUserDetails);
+router.put('/users/:userId/block', adminMiddleware, adminController.blockUser);
+router.put('/users/:userId/unblock', adminMiddleware, adminController.unblockUser);
 
 // Transaction Management
-router.get('/transactions', authMiddleware, adminController.getAllTransactions);
+router.get('/transactions', adminMiddleware, adminController.getAllTransactions);
 
-console.log('✅ Admin routes loaded successfully');
+console.log('✅ Admin routes loaded successfully with secure middleware');
 
 module.exports = router;
