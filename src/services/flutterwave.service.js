@@ -59,55 +59,68 @@ class FlutterwaveService {
     /**
      * Verify BVN details match user information
      */
-    async verifyBVN(bvn, firstName, lastName, dob) {
-        try {
-            console.log('🔍 Verifying BVN:', { bvn: bvn.slice(0, 3) + '****', firstName, lastName });
-
-            const response = await axios.post(
-                `${this.baseURL}/kyc/bvns/${bvn}`,
-                {
-                    first_name: firstName,
-                    last_name: lastName,
-                    date_of_birth: dob // Format: YYYY-MM-DD
-                },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${this.secretKey}`,
-                        'Content-Type': 'application/json'
-                    }
+async verifyBVN(bvn, firstName, lastName, dob) {
+    try {
+        console.log('🔍 Verifying BVN:', { 
+            bvn: bvn.substring(0, 3) + '****', 
+            firstName, 
+            lastName 
+        });
+        
+        // ✅ CORRECT ENDPOINT: /v3/bvn/verifications
+        const response = await axios.post(
+            'https://api.flutterwave.com/v3/bvn/verifications',
+            {
+                bvn: bvn,
+                first_name: firstName,
+                last_name: lastName,
+                // date_of_birth is optional but recommended
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${this.secretKey}`,
+                    'Content-Type': 'application/json'
                 }
-            );
-
-            if (response.data.status === 'success') {
-                const bvnData = response.data.data;
-                
-                console.log('✅ BVN verification result:', {
-                    firstNameMatch: bvnData.first_name?.toLowerCase() === firstName.toLowerCase(),
-                    lastNameMatch: bvnData.last_name?.toLowerCase() === lastName.toLowerCase()
-                });
-
-                return {
-                    success: true,
-                    data: {
-                        firstName: bvnData.first_name,
-                        lastName: bvnData.last_name,
-                        dob: bvnData.date_of_birth,
-                        phone: bvnData.phone_number,
-                        match: bvnData.first_name?.toLowerCase() === firstName.toLowerCase() && 
-                               bvnData.last_name?.toLowerCase() === lastName.toLowerCase()
-                    }
-                };
-            } else {
-                throw new Error(response.data.message || 'BVN verification failed');
             }
-        } catch (error) {
-            console.error('❌ BVN verification error:', error.response?.data || error.message);
+        );
+        
+        console.log('✅ BVN verification response:', response.data);
+        
+        if (response.data.status === 'success') {
+            const data = response.data.data;
+            
+            return {
+                success: true,
+                match: data.first_name?.toLowerCase() === firstName.toLowerCase() && 
+                       data.last_name?.toLowerCase() === lastName.toLowerCase(),
+                bvnData: {
+                    firstName: data.first_name,
+                    lastName: data.last_name,
+                    middleName: data.middle_name,
+                    dateOfBirth: data.date_of_birth,
+                    phoneNumber: data.phone_number,
+                    verified: true
+                }
+            };
+        } else {
+            console.log('⚠️ BVN verification returned non-success status:', response.data);
             return {
                 success: false,
-                error: error.response?.data?.message || error.message
+                error: response.data.message || 'BVN verification failed',
+                bvnData: null
             };
         }
+    } catch (error) {
+        console.error('❌ BVN verification error:', error.response?.data || error.message);
+        
+        // Return structured error
+        return {
+            success: false,
+            error: error.response?.data?.message || error.message || 'BVN verification failed',
+            bvnData: null
+        };
     }
+}
 
     /**
      * Get live exchange rates from Flutterwave
