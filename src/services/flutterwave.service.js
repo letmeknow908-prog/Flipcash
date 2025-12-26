@@ -67,14 +67,13 @@ async verifyBVN(bvn, firstName, lastName, dob) {
             lastName 
         });
         
-        // ✅ CORRECT ENDPOINT: /v3/bvn/verifications
+        // ✅ CORRECT ENDPOINT for production
         const response = await axios.post(
             'https://api.flutterwave.com/v3/bvn/verifications',
             {
                 bvn: bvn,
                 first_name: firstName,
                 last_name: lastName,
-                // date_of_birth is optional but recommended
             },
             {
                 headers: {
@@ -113,7 +112,6 @@ async verifyBVN(bvn, firstName, lastName, dob) {
     } catch (error) {
         console.error('❌ BVN verification error:', error.response?.data || error.message);
         
-        // Return structured error
         return {
             success: false,
             error: error.response?.data?.message || error.message || 'BVN verification failed',
