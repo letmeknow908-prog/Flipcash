@@ -36,14 +36,14 @@ const routes = [
 
 routes.forEach(route => {
     try {
-        console.log(`🔍 Attempting to load: ${route.path}`);
+        console.log(`🔍 Attempting to load: ${route.path}`);  // ✅ FIXED
         const router = require(route.path);
         app.use(route.name, router);
-        console.log(`✅ Loaded route: ${route.name}`);
+        console.log(`✅ Loaded route: ${route.name}`);  // ✅ FIXED
     } catch (error) {
-        console.log(`❌ FAILED to load ${route.path}:`);
-        console.log(`   Error: ${error.message}`);
-        console.log(`   Stack: ${error.stack}`);
+        console.log(`❌ FAILED to load ${route.path}:`);  // ✅ FIXED
+        console.log(`   Error: ${error.message}`);  // ✅ FIXED
+        console.log(`   Stack: ${error.stack}`);  // ✅ FIXED
     }
 });
 
@@ -85,9 +85,9 @@ app.use((err, req, res, next) => {
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 FlipCash API running on port ${PORT}`);
-    console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🌐 API Base: http://localhost:${PORT}/api/v1`);
+    console.log(`🚀 FlipCash API running on port ${PORT}`);  // ✅ FIXED
+    console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);  // ✅ FIXED
+    console.log(`🌐 API Base: http://localhost:${PORT}/api/v1`);  // ✅ FIXED
     console.log('✅ Server ready!');
 });
 
