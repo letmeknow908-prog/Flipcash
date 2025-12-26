@@ -12,18 +12,28 @@ const authMiddleware = (req, res, next) => {
             });
         }
         
-        jwt.verify(token, process.env.JWT_SECRET || 'flipcash-secret-key-2025', (err, user) => {
+        jwt.verify(token, process.env.JWT_SECRET || 'flipcash-secret-key-2025', (err, decoded) => {
             if (err) {
+                console.log('❌ Token verification failed:', err.message);
                 return res.status(403).json({
                     status: 'error',
                     message: 'Invalid or expired token'
                 });
             }
-            req.user = user;
+            
+            // Attach user data to request
+            req.user = {
+                id: decoded.id || decoded.userId,
+                email: decoded.email,
+                role: decoded.role,
+                isAdmin: decoded.isAdmin || false
+            };
+            
+            console.log('✅ Auth successful for user:', req.user.id);
             next();
         });
     } catch (error) {
-        console.error('Authentication error:', error);
+        console.error('❌ Authentication error:', error);
         res.status(500).json({
             status: 'error',
             message: 'Authentication failed',
@@ -32,5 +42,4 @@ const authMiddleware = (req, res, next) => {
     }
 };
 
-// Export as default
 module.exports = authMiddleware;
