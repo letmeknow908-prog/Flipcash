@@ -1,29 +1,27 @@
 const jwt = require('jsonwebtoken');
 
-exports.authenticateToken = (req, res, next) => {
+const authMiddleware = (req, res, next) => {
     try {
         const authHeader = req.headers['authorization'];
         const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
+        
         if (!token) {
             return res.status(401).json({
                 status: 'error',
                 message: 'Access token required'
             });
         }
-
-        jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
+        
+        jwt.verify(token, process.env.JWT_SECRET || 'flipcash-secret-key-2025', (err, user) => {
             if (err) {
                 return res.status(403).json({
                     status: 'error',
                     message: 'Invalid or expired token'
                 });
             }
-
             req.user = user;
             next();
         });
-
     } catch (error) {
         console.error('Authentication error:', error);
         res.status(500).json({
@@ -34,4 +32,5 @@ exports.authenticateToken = (req, res, next) => {
     }
 };
 
-module.exports = exports;
+// Export as default
+module.exports = authMiddleware;
