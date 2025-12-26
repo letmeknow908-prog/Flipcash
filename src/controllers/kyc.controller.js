@@ -2,6 +2,14 @@ const db = require('../../config/db');
 
 const submitKYC = async (req, res) => {
     try {
+        // ===== DEBUG LOGGING START =====
+        console.log('=== KYC SUBMISSION DEBUG ===');
+        console.log('📥 Headers:', req.headers.authorization ? 'Token present ✅' : 'NO TOKEN ❌');
+        console.log('📥 req.user:', JSON.stringify(req.user, null, 2));
+        console.log('📥 req.body:', JSON.stringify(req.body, null, 2));
+        console.log('============================');
+        // ===== DEBUG LOGGING END =====
+        
         // Get user ID from authenticated request
         const userId = req.user?.id || req.user?.userId;
         
@@ -20,14 +28,28 @@ const submitKYC = async (req, res) => {
             address,
             idType,
             idNumber,
-            bvn
+            bvn,
+            country,
+            occupation,
+            sourceFunds
         } = req.body;
+
+        // Debug: Show which fields are present
+        console.log('📋 Field check:', {
+            fullname: fullname ? '✅' : '❌',
+            dob: dob ? '✅' : '❌',
+            address: address ? '✅' : '❌',
+            idType: idType ? '✅' : '❌',
+            idNumber: idNumber ? '✅' : '❌',
+            bvn: bvn ? '✅' : '❌'
+        });
 
         // Validate required fields
         if (!fullname || !dob || !address || !idType || !idNumber || !bvn) {
+            console.log('❌ Missing required fields!');
             return res.status(400).json({
                 status: 'error',
-                message: 'All KYC fields are required'
+                message: 'All KYC fields are required (fullname, dob, address, idType, idNumber, bvn)'
             });
         }
 
@@ -40,6 +62,7 @@ const submitKYC = async (req, res) => {
         );
 
         if (existingKYC.rows.length > 0) {
+            console.log(`⚠️ User ${userId} already submitted KYC`);
             return res.status(400).json({
                 status: 'error',
                 message: 'KYC already submitted. Please wait for review.'
@@ -47,6 +70,7 @@ const submitKYC = async (req, res) => {
         }
 
         // Insert KYC data
+        console.log(`💾 Inserting KYC data for user ${userId}...`);
         await db.query(
             `INSERT INTO kyc_data 
              (user_id, fullname, dob, address, id_type, id_number, bvn, kyc_submitted_at)
@@ -55,6 +79,7 @@ const submitKYC = async (req, res) => {
         );
 
         // Update user status
+        console.log(`🔄 Updating user ${userId} status to pending...`);
         await db.query(
             `UPDATE users 
              SET kyc_status = 'pending' 
@@ -62,7 +87,7 @@ const submitKYC = async (req, res) => {
             [userId]
         );
 
-        console.log(`✅ KYC submitted for user ${userId}`);
+        console.log(`✅ KYC submitted successfully for user ${userId}`);
 
         res.status(200).json({
             status: 'success',
@@ -71,6 +96,7 @@ const submitKYC = async (req, res) => {
 
     } catch (error) {
         console.error('❌ KYC submission error:', error);
+        console.error('Error stack:', error.stack);
         res.status(500).json({
             status: 'error',
             message: 'KYC submission failed',
