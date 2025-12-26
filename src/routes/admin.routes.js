@@ -1,27 +1,40 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
-const adminMiddleware = require('../middleware/admin.middleware');  // Use admin middleware!
+const adminMiddleware = require('../middleware/admin.middleware');
 
 console.log('📊 Loading admin routes...');
 
-// Dashboard stats
-router.get('/stats', adminMiddleware, adminController.getDashboardStats);
+// Apply admin middleware to ALL routes
+router.use(adminMiddleware);
 
-// KYC Management
-router.get('/kyc', adminMiddleware, adminController.getAllKYC);
-router.get('/kyc/:userId', adminMiddleware, adminController.getKYCDetails);
-router.put('/kyc/:userId/approve', adminMiddleware, adminController.approveKYC);
-router.put('/kyc/:userId/reject', adminMiddleware, adminController.rejectKYC);
+// =========================
+// DASHBOARD STATS
+// =========================
+router.get('/stats', adminController.getDashboardStats);
 
-// User Management
-router.get('/users', adminMiddleware, adminController.getAllUsers);
-router.get('/users/:userId', adminMiddleware, adminController.getUserDetails);
-router.put('/users/:userId/block', adminMiddleware, adminController.blockUser);
-router.put('/users/:userId/unblock', adminMiddleware, adminController.unblockUser);
+// =========================
+// KYC MANAGEMENT
+// =========================
+router.get('/kyc', adminController.getAllKYC);
+router.get('/kyc/:userId', adminController.getKYCDetails);
 
-// Transaction Management
-router.get('/transactions', adminMiddleware, adminController.getAllTransactions);
+// FIXED: Changed from PUT to POST (frontend uses POST!)
+router.post('/kyc/:userId/approve', adminController.approveKYC);
+router.post('/kyc/:userId/reject', adminController.rejectKYC);
+
+// =========================
+// USER MANAGEMENT
+// =========================
+router.get('/users', adminController.getAllUsers);
+router.get('/users/:userId', adminController.getUserDetails);
+router.put('/users/:userId/block', adminController.blockUser);
+router.put('/users/:userId/unblock', adminController.unblockUser);
+
+// =========================
+// TRANSACTION MANAGEMENT
+// =========================
+router.get('/transactions', adminController.getAllTransactions);
 
 console.log('✅ Admin routes loaded successfully with secure middleware');
 
