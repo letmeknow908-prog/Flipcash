@@ -1,6 +1,6 @@
 const db = require('../../config/db');
 
-exports.submitKYC = async (req, res) => {
+const submitKYC = async (req, res) => {
     try {
         // Get user ID from authenticated request
         const userId = req.user?.id || req.user?.userId;
@@ -79,7 +79,7 @@ exports.submitKYC = async (req, res) => {
     }
 };
 
-exports.getKYCStatus = async (req, res) => {
+const getKYCStatus = async (req, res) => {
     try {
         const userId = req.user?.id || req.user?.userId;
         
@@ -133,7 +133,8 @@ exports.getKYCStatus = async (req, res) => {
     }
 };
 
+// Export correctly
 module.exports = {
-    submitKYC: exports.submitKYC,
-    getKYCStatus: exports.getKYCStatus
+    submitKYC,
+    getKYCStatus
 };
