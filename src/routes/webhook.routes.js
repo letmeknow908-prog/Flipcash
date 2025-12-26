@@ -5,28 +5,61 @@ const crypto = require('crypto');
 // Flutterwave Webhook Handler
 router.post('/flutterwave', async (req, res) => {
     try {
+        const secretHash = process.env.FLW_WEBHOOK_SECRET;
         const signature = req.headers['verif-hash'];
-        const secretHash = process.env.FLW_SECRET_HASH;
-
+        
+        console.log('✅ Webhook received from Flutterwave');
+        console.log('🔍 Event:', req.body.event);
+        console.log('🔍 TX Ref:', req.body.data?.tx_ref);
+        
         // Verify webhook signature
         if (!signature || signature !== secretHash) {
             console.log('❌ Invalid webhook signature');
             return res.status(401).json({ status: 'error', message: 'Invalid signature' });
         }
-
-        const payload = req.body;
-        console.log('📨 Flutterwave webhook received:', payload.event);
-
-        // Handle different event types
-        if (payload.event === 'charge.completed') {
-            await handleChargeCompleted(payload.data);
-        } else if (payload.event === 'transfer.completed') {
-            await handleTransferCompleted(payload.data);
+        
+        console.log('✅ Webhook verified successfully');
+        
+        // Process different event types
+        if (req.body.event === 'charge.completed') {
+            const data = req.body.data;
+            
+            if (data.status === 'successful' && data.currency === 'NGN') {
+                // Extract user_id from tx_ref (format: flipcash_USERID_TIMESTAMP)
+                const parts = data.tx_ref.split('_');
+                const userId = parseInt(parts[1]);
+                
+                console.log('💰 Processing deposit for user:', userId);
+                
+                // Credit user's NGN wallet
+                await db.query(`
+                    UPDATE wallets 
+                    SET balance = balance + $1 
+                    WHERE user_id = $2 AND currency = 'NGN'
+                `, [data.amount, userId]);
+                
+                // Record transaction
+                await db.query(`
+                    INSERT INTO transactions 
+                    (user_id, type, amount, currency, status, reference, metadata)
+                    VALUES ($1, 'deposit', $2, 'NGN', 'completed', $3, $4)
+                `, [
+                    userId,
+                    data.amount,
+                    data.flw_ref,
+                    JSON.stringify({
+                        tx_ref: data.tx_ref,
+                        customer: data.customer
+                    })
+                ]);
+                
+                console.log(`✅ Deposit processed: ${data.amount} NGN credited to user ${userId}`);
+            }
         }
-
-        res.status(200).json({ status: 'success' });
+        
+        res.json({ status: 'success' });
     } catch (error) {
-        console.error('❌ Webhook error:', error);
+        console.error('❌ Webhook processing error:', error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 });
