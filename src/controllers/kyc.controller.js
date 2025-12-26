@@ -2,14 +2,6 @@ const db = require('../../config/db');
 
 const submitKYC = async (req, res) => {
     try {
-        // ===== DEBUG LOGGING START =====
-        console.log('=== KYC SUBMISSION DEBUG ===');
-        console.log('📥 Headers:', req.headers.authorization ? 'Token present ✅' : 'NO TOKEN ❌');
-        console.log('📥 req.user:', JSON.stringify(req.user, null, 2));
-        console.log('📥 req.body:', JSON.stringify(req.body, null, 2));
-        console.log('============================');
-        // ===== DEBUG LOGGING END =====
-        
         // Get user ID from authenticated request
         const userId = req.user?.id || req.user?.userId;
         
@@ -34,19 +26,9 @@ const submitKYC = async (req, res) => {
             sourceFunds
         } = req.body;
 
-        // Debug: Show which fields are present
-        console.log('📋 Field check:', {
-            fullname: fullname ? '✅' : '❌',
-            dob: dob ? '✅' : '❌',
-            address: address ? '✅' : '❌',
-            idType: idType ? '✅' : '❌',
-            idNumber: idNumber ? '✅' : '❌',
-            bvn: bvn ? '✅' : '❌'
-        });
-
         // Validate required fields
         if (!fullname || !dob || !address || !idType || !idNumber || !bvn) {
-            console.log('❌ Missing required fields!');
+            console.log('❌ Missing required KYC fields');
             return res.status(400).json({
                 status: 'error',
                 message: 'All KYC fields are required (fullname, dob, address, idType, idNumber, bvn)'
@@ -57,37 +39,56 @@ const submitKYC = async (req, res) => {
 
         // Check if user already submitted KYC
         const existingKYC = await db.query(
-            'SELECT id FROM kyc_data WHERE user_id = $1',
+            'SELECT id, user_id FROM kyc_data WHERE user_id = $1',
             [userId]
         );
 
         if (existingKYC.rows.length > 0) {
-            console.log(`⚠️ User ${userId} already submitted KYC`);
-            return res.status(400).json({
-                status: 'error',
-                message: 'KYC already submitted. Please wait for review.'
-            });
+            // UPDATE existing KYC submission
+            console.log(`🔄 Updating existing KYC for user ${userId}`);
+            
+            await db.query(
+                `UPDATE kyc_data 
+                 SET fullname = $2, 
+                     dob = $3, 
+                     address = $4, 
+                     id_type = $5, 
+                     id_number = $6, 
+                     bvn = $7,
+                     kyc_submitted_at = CURRENT_TIMESTAMP,
+                     kyc_approved_at = NULL,
+                     kyc_rejection_reason = NULL,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE user_id = $1`,
+                [userId, fullname, dob, address, idType, idNumber, bvn]
+            );
+            
+            console.log(`✅ KYC updated for user ${userId}`);
+        } else {
+            // INSERT new KYC submission
+            console.log(`💾 Creating new KYC for user ${userId}`);
+            
+            await db.query(
+                `INSERT INTO kyc_data 
+                 (user_id, fullname, dob, address, id_type, id_number, bvn, kyc_submitted_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
+                [userId, fullname, dob, address, idType, idNumber, bvn]
+            );
+            
+            console.log(`✅ KYC created for user ${userId}`);
         }
 
-        // Insert KYC data
-        console.log(`💾 Inserting KYC data for user ${userId}...`);
-        await db.query(
-            `INSERT INTO kyc_data 
-             (user_id, fullname, dob, address, id_type, id_number, bvn, kyc_submitted_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
-            [userId, fullname, dob, address, idType, idNumber, bvn]
-        );
-
-        // Update user status
-        console.log(`🔄 Updating user ${userId} status to pending...`);
+        // Update user status to pending
         await db.query(
             `UPDATE users 
-             SET kyc_status = 'pending' 
+             SET kyc_status = 'pending', 
+                 kyc_verified = false,
+                 updated_at = CURRENT_TIMESTAMP
              WHERE id = $1`,
             [userId]
         );
 
-        console.log(`✅ KYC submitted successfully for user ${userId}`);
+        console.log(`✅ KYC submission completed for user ${userId}`);
 
         res.status(200).json({
             status: 'success',
