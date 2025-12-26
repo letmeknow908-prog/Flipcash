@@ -18,13 +18,11 @@ router.get('/stats', adminController.getDashboardStats);
 // =========================
 router.get('/kyc', adminController.getAllKYC);
 router.get('/kyc/:userId', adminController.getKYCDetails);
-
-// FIXED: Changed from PUT to POST (frontend uses POST!)
 router.post('/kyc/:userId/approve', adminController.approveKYC);
 router.post('/kyc/:userId/reject', adminController.rejectKYC);
 
 // Verify user's BVN before approving KYC
-router.post('/kyc/:userId/verify-bvn', adminAuthMiddleware, async (req, res) => {
+router.post('/kyc/:userId/verify-bvn', async (req, res) => {  // ✅ REMOVED adminAuthMiddleware
     try {
         const { userId } = req.params;
         const db = require('../../config/db');
