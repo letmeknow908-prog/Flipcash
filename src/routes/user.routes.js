@@ -11,7 +11,54 @@ router.get('/health', (req, res) => {
     });
 });
 
-// Get user profile
+// ✅ ADD THIS - Get user profile (called by frontend as /users/me)
+router.get('/me', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const db = require('../../config/db');
+        
+        // Get user basic info
+        const userResult = await db.query(
+            'SELECT id, first_name, last_name, email, phone, kyc_status, kyc_verified, created_at FROM users WHERE id = $1',
+            [userId]
+        );
+        
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'User not found'
+            });
+        }
+        
+        const user = userResult.rows[0];
+        
+        // Get KYC data if exists
+        const kycResult = await db.query(
+            'SELECT fullname, dob, address, id_type, id_number, bvn, country, occupation, source_funds FROM kyc_verifications WHERE user_id = $1',
+            [userId]
+        );
+        
+        // Merge KYC data if exists
+        if (kycResult.rows.length > 0) {
+            user.kyc_data = kycResult.rows[0];
+            // Also add to top level for backward compatibility
+            Object.assign(user, kycResult.rows[0]);
+        }
+        
+        res.status(200).json({
+            status: 'success',
+            data: user
+        });
+    } catch (error) {
+        console.error('Get user profile error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get profile'
+        });
+    }
+});
+
+// Keep the old /profile endpoint for backward compatibility
 router.get('/profile', authMiddleware, async (req, res) => {
     try {
         const userId = req.user.id;
@@ -98,5 +145,4 @@ router.get('/transactions', authMiddleware, async (req, res) => {
 });
 
 console.log('✅ User routes loaded');
-
 module.exports = router;
