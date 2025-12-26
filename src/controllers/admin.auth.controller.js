@@ -3,13 +3,12 @@ const jwt = require('jsonwebtoken');
 const db = require('../../config/db');
 
 /**
- * Register Admin (PROTECTED - Only for initial setup or by super admin)
+ * Register Admin
  */
-exports.registerAdmin = async (req, res) => {
+const registerAdmin = async (req, res) => {
     try {
         const { username, email, password, fullName } = req.body;
 
-        // Validate required fields
         if (!username || !email || !password) {
             return res.status(400).json({
                 status: 'error',
@@ -17,7 +16,6 @@ exports.registerAdmin = async (req, res) => {
             });
         }
 
-        // Check if admin exists
         const existingAdmin = await db.query(
             'SELECT id FROM admins WHERE email = $1 OR username = $2',
             [email.toLowerCase(), username.toLowerCase()]
@@ -30,11 +28,9 @@ exports.registerAdmin = async (req, res) => {
             });
         }
 
-        // Hash password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Insert admin
         const result = await db.query(
             `INSERT INTO admins (username, email, password, full_name, created_at)
              VALUES ($1, $2, $3, $4, NOW())
@@ -69,9 +65,9 @@ exports.registerAdmin = async (req, res) => {
 };
 
 /**
- * Admin Login (SEPARATE from user login)
+ * Admin Login
  */
-exports.adminLogin = async (req, res) => {
+const adminLogin = async (req, res) => {
     try {
         const { email, password } = req.body;
 
@@ -84,14 +80,13 @@ exports.adminLogin = async (req, res) => {
 
         console.log(`🔐 Admin login attempt: ${email}`);
 
-        // Find admin by email
         const result = await db.query(
             'SELECT * FROM admins WHERE LOWER(email) = LOWER($1)',
             [email]
         );
 
         if (result.rows.length === 0) {
-            console.log(`❌ Admin login failed: Not found - ${email}`);
+            console.log(`❌ Admin not found: ${email}`);
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid credentials'
@@ -100,42 +95,38 @@ exports.adminLogin = async (req, res) => {
 
         const admin = result.rows[0];
 
-        // Check if admin is active
         if (!admin.is_active) {
-            console.log(`❌ Admin login failed: Account disabled - ${email}`);
+            console.log(`❌ Admin disabled: ${email}`);
             return res.status(403).json({
                 status: 'error',
                 message: 'Admin account is disabled'
             });
         }
 
-        // Verify password
         const isPasswordValid = await bcrypt.compare(password, admin.password);
         
         if (!isPasswordValid) {
-            console.log(`❌ Admin login failed: Invalid password - ${email}`);
+            console.log(`❌ Invalid password: ${email}`);
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid credentials'
             });
         }
 
-        // Update last login
         await db.query(
             'UPDATE admins SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
             [admin.id]
         );
 
-        // Generate JWT token with admin flag
         const token = jwt.sign(
             { 
                 id: admin.id,
                 email: admin.email,
                 role: admin.role,
-                isAdmin: true  // Important flag!
+                isAdmin: true
             },
             process.env.JWT_SECRET || 'flipcash-secret-key-2025',
-            { expiresIn: '12h' }  // Shorter expiry for admin
+            { expiresIn: '12h' }
         );
 
         console.log(`✅ Admin login successful: ${admin.email}`);
@@ -166,9 +157,9 @@ exports.adminLogin = async (req, res) => {
 };
 
 /**
- * Verify admin token
+ * Verify Admin
  */
-exports.verifyAdmin = async (req, res) => {
+const verifyAdmin = async (req, res) => {
     try {
         const adminId = req.user.id;
 
@@ -214,6 +205,7 @@ exports.verifyAdmin = async (req, res) => {
     }
 };
 
+// Export all functions
 module.exports = {
     registerAdmin,
     adminLogin,
