@@ -11,11 +11,13 @@ router.get('/health', (req, res) => {
     });
 });
 
-// ✅ ADD THIS - Get user profile (called by frontend as /users/me)
+// ✅ Get user profile (called by frontend as /users/me)
 router.get('/me', authMiddleware, async (req, res) => {
     try {
         const userId = req.user.id;
         const db = require('../../config/db');
+        
+        console.log('🔍 Fetching user profile for ID:', userId);
         
         // Get user basic info
         const userResult = await db.query(
@@ -31,26 +33,32 @@ router.get('/me', authMiddleware, async (req, res) => {
         }
         
         const user = userResult.rows[0];
+        console.log('👤 User found:', { id: user.id, email: user.email, kyc_status: user.kyc_status });
         
-        // Get KYC data if exists
+        // Get KYC data if exists (FIXED: changed kyc_verifications to kyc_data)
         const kycResult = await db.query(
-            'SELECT fullname, dob, address, id_type, id_number, bvn, country, occupation, source_funds FROM kyc_verifications WHERE user_id = $1',
+            'SELECT fullname, dob, address, id_type, id_number, bvn, country, occupation, source_funds FROM kyc_data WHERE user_id = $1',
             [userId]
         );
         
         // Merge KYC data if exists
         if (kycResult.rows.length > 0) {
+            console.log('📋 KYC data found:', { fullname: kycResult.rows[0].fullname });
             user.kyc_data = kycResult.rows[0];
             // Also add to top level for backward compatibility
             Object.assign(user, kycResult.rows[0]);
+        } else {
+            console.log('⚠️ No KYC data found for user');
         }
+        
+        console.log('✅ Returning user data with KYC status:', user.kyc_status);
         
         res.status(200).json({
             status: 'success',
             data: user
         });
     } catch (error) {
-        console.error('Get user profile error:', error);
+        console.error('❌ Get user profile error:', error);
         res.status(500).json({
             status: 'error',
             message: 'Failed to get profile'
