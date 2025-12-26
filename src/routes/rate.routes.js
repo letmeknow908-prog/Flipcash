@@ -45,11 +45,15 @@ router.post('/account/generate', authMiddleware, async (req, res) => {
         const userId = req.user.id;
         const db = require('../../config/db');
         
-        // Get user data
-        const userResult = await db.query(
-            'SELECT first_name, last_name, email, phone, kyc_status, kyc_verified FROM users WHERE id = $1',
-            [userId]
-        );
+        console.log('🏦 Virtual account generation request for user:', userId);
+        
+        // Check if user exists and has KYC approved
+        const userResult = await db.query(`
+            SELECT u.*, k.bvn, k.fullname
+            FROM users u
+            LEFT JOIN kyc_data k ON u.id = k.user_id
+            WHERE u.id = $1
+        `, [userId]);
         
         if (userResult.rows.length === 0) {
             return res.status(404).json({
@@ -60,89 +64,117 @@ router.post('/account/generate', authMiddleware, async (req, res) => {
         
         const user = userResult.rows[0];
         
+        console.log('👤 User details:', {
+            id: user.id,
+            email: user.email,
+            kyc_status: user.kyc_status,
+            has_bvn: !!user.bvn
+        });
+        
         // Check KYC status
-        if (user.kyc_status !== 'approved' || !user.kyc_verified) {
-            return res.status(403).json({
+        if (user.kyc_status !== 'approved') {
+            return res.status(400).json({
                 status: 'error',
-                message: 'KYC verification required. Please complete KYC to generate virtual account.'
+                message: 'KYC must be approved before generating virtual account'
+            });
+        }
+        
+        // Check if BVN exists (required for production)
+        if (!user.bvn) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'BVN is required to generate virtual account'
             });
         }
         
         // Check if account already exists
         const existingAccount = await db.query(
-            'SELECT account_number, account_name, bank FROM virtual_accounts WHERE user_id = $1',
+            'SELECT * FROM virtual_accounts WHERE user_id = $1',
             [userId]
         );
         
         if (existingAccount.rows.length > 0) {
-            return res.status(200).json({
+            console.log('✅ Account already exists:', existingAccount.rows[0]);
+            return res.json({
                 status: 'success',
                 data: {
                     accountNumber: existingAccount.rows[0].account_number,
                     accountName: existingAccount.rows[0].account_name,
-                    bank: existingAccount.rows[0].bank
+                    bankName: existingAccount.rows[0].bank || 'Wema Bank',
+                    message: 'Account already generated'
                 }
             });
         }
         
-        // Get BVN from KYC data
-        const kycResult = await db.query(
-            'SELECT bvn FROM kyc_data WHERE user_id = $1',
-            [userId]
-        );
+        // Generate new account via Flutterwave
+        console.log('📞 Calling Flutterwave API...');
         
-        if (kycResult.rows.length === 0 || !kycResult.rows[0].bvn) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'BVN is required to generate virtual account. Please update your KYC information.'
-            });
-        }
-        
-        // Create virtual account with Flutterwave
-        const accountResult = await flutterwaveService.createVirtualAccount({
-            userId: userId,
+        const accountData = {
             email: user.email,
-            firstName: user.first_name,
-            lastName: user.last_name,
-            bvn: kycResult.rows[0].bvn
+            is_permanent: true,
+            bvn: user.bvn,
+            tx_ref: `FLIPCASH_${userId}_${Date.now()}`,
+            firstname: user.first_name,
+            lastname: user.last_name,
+            narration: `FlipCash - ${user.first_name} ${user.last_name}`
+        };
+        
+        console.log('📋 Request data:', { ...accountData, bvn: '***hidden***' });
+        
+        const result = await flutterwaveService.createVirtualAccount(accountData);
+        
+        console.log('📡 Flutterwave response:', {
+            success: !!result.account_number,
+            account_number: result.account_number,
+            account_name: result.account_name,
+            bank_name: result.bank_name,
+            flw_ref: result.flw_ref,
+            order_ref: result.order_ref
         });
         
-        if (accountResult.success) {
-            // Save to database
-            await db.query(
-                `INSERT INTO virtual_accounts 
-                 (user_id, account_number, account_name, bank, flw_ref, order_ref) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [
-                    userId,
-                    accountResult.data.accountNumber,
-                    accountResult.data.accountName,
-                    accountResult.data.bank,
-                    accountResult.data.flwRef,
-                    accountResult.data.orderRef
-                ]
-            );
-            
-            return res.status(200).json({
-                status: 'success',
-                data: {
-                    accountNumber: accountResult.data.accountNumber,
-                    accountName: accountResult.data.accountName,
-                    bank: accountResult.data.bank
-                }
-            });
-        } else {
+        if (!result.account_number) {
+            console.error('❌ No account number in response!');
+            console.error('Full response:', JSON.stringify(result, null, 2));
             return res.status(500).json({
                 status: 'error',
-                message: accountResult.error || 'Failed to generate virtual account. Please contact support.'
+                message: 'Failed to generate account number. Please contact support.'
             });
         }
         
+        // Save to database
+        const saveResult = await db.query(`
+            INSERT INTO virtual_accounts (
+                user_id, account_number, account_name, bank, flw_ref, order_ref
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING *
+        `, [
+            userId,
+            result.account_number,
+            result.account_name,
+            result.bank_name || 'Wema Bank',
+            result.flw_ref || null,
+            result.order_ref || null
+        ]);
+        
+        console.log('✅ Virtual account saved to database:', saveResult.rows[0]);
+        
+        res.json({
+            status: 'success',
+            data: {
+                accountNumber: result.account_number,
+                accountName: result.account_name,
+                bankName: result.bank_name || 'Wema Bank',
+                message: 'Virtual account generated successfully'
+            }
+        });
+        
     } catch (error) {
-        console.error('❌ Generate account error:', error);
+        console.error('❌ Virtual account generation error:', error);
+        console.error('Error details:', error.response?.data || error.message);
+        
         res.status(500).json({
             status: 'error',
-            message: 'Failed to generate account. Please try again or contact support.'
+            message: 'Failed to generate virtual account: ' + error.message
         });
     }
 });
