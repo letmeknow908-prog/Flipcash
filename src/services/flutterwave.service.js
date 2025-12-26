@@ -1,98 +1,147 @@
-const Flutterwave = require('flutterwave-node-v3');
-
-const flw = new Flutterwave(
-  process.env.FLW_PUBLIC_KEY,
-  process.env.FLW_SECRET_KEY
-);
+const axios = require('axios');
 
 class FlutterwaveService {
-  // Generate virtual account for user
-  async generateVirtualAccount(user) {
-    try {
-      console.log('🏦 Generating virtual account for:', user.email);
-
-      const payload = {
-        email: user.email,
-        is_permanent: true,
-        tx_ref: `VA-${user.id}-${Date.now()}`,
-        firstname: user.firstName || user.first_name,
-        lastname: user.lastName || user.last_name,
-        narration: `FlipCash ${user.firstName || user.first_name}`,
-      };
-
-      const response = await flw.VirtualAcct.create(payload);
-      
-      console.log('✅ Flutterwave response:', response);
-
-      if (response.status === 'success') {
-        return {
-          accountNumber: response.data.account_number,
-          accountBank: response.data.bank_name,
-          accountName: response.data.account_name,
-          provider: 'flutterwave',
-          reference: response.data.flw_ref
-        };
-      }
-      
-      throw new Error(response.message || 'Failed to create virtual account');
-    } catch (error) {
-      console.error('❌ Flutterwave error:', error);
-      throw error;
+    constructor() {
+        this.secretKey = process.env.FLW_SECRET_KEY;
+        this.baseURL = 'https://api.flutterwave.com/v3';
     }
-  }
 
-  // Verify payment
-  async verifyPayment(transactionId) {
-    try {
-      const response = await flw.Transaction.verify({ id: transactionId });
-      
-      if (response.status === 'success' && response.data.status === 'successful') {
-        return {
-          success: true,
-          amount: response.data.amount,
-          currency: response.data.currency,
-          reference: response.data.tx_ref,
-          customerEmail: response.data.customer.email
-        };
-      }
-      
-      return { success: false };
-    } catch (error) {
-      console.error('❌ Verify payment error:', error);
-      throw error;
-    }
-  }
+    /**
+     * Create a virtual account for a user
+     */
+    async createVirtualAccount(userData) {
+        try {
+            console.log('🏦 Creating Flutterwave virtual account for:', userData.email);
 
-  // Get exchange rates
-  async getExchangeRates() {
-    try {
-      // Flutterwave doesn't have a direct rate API, so we'll use fallback
-      // You can integrate with exchangerate-api.com (free) or similar
-      const rates = {
-        NGN_KSH: 0.285,  // 1 NGN = 0.285 KSH
-        KSH_NGN: 3.508,  // 1 KSH = 3.508 NGN
-        NGN_USD: 0.0012,
-        KSH_USD: 0.0077,
-        USD_NGN: 833.33,
-        USD_KSH: 129.87,
-        updated_at: new Date()
-      };
-      
-      return rates;
-    } catch (error) {
-      console.error('❌ Get rates error:', error);
-      // Return fallback rates
-      return {
-        NGN_KSH: 0.285,
-        KSH_NGN: 3.508,
-        NGN_USD: 0.0012,
-        KSH_USD: 0.0077,
-        USD_NGN: 833.33,
-        USD_KSH: 129.87,
-        updated_at: new Date()
-      };
+            const response = await axios.post(
+                `${this.baseURL}/virtual-account-numbers`,
+                {
+                    email: userData.email,
+                    is_permanent: true,
+                    bvn: userData.bvn,
+                    tx_ref: `flipcash_${userData.userId}_${Date.now()}`,
+                    firstname: userData.firstName,
+                    lastname: userData.lastName,
+                    narration: `FlipCash - ${userData.firstName} ${userData.lastName}`
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.secretKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (response.data.status === 'success') {
+                console.log('✅ Virtual account created:', response.data.data);
+                return {
+                    success: true,
+                    data: {
+                        accountNumber: response.data.data.account_number,
+                        accountName: response.data.data.account_name || `${userData.firstName} ${userData.lastName}`,
+                        bank: response.data.data.bank_name,
+                        flwRef: response.data.data.flw_ref,
+                        orderRef: response.data.data.order_ref
+                    }
+                };
+            } else {
+                throw new Error(response.data.message || 'Failed to create virtual account');
+            }
+        } catch (error) {
+            console.error('❌ Flutterwave virtual account error:', error.response?.data || error.message);
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message
+            };
+        }
     }
-  }
+
+    /**
+     * Get live exchange rates from Flutterwave
+     */
+    async getExchangeRates() {
+        try {
+            console.log('💱 Fetching live exchange rates from Flutterwave...');
+
+            // NGN to KES
+            const ngnToKesResponse = await axios.get(
+                `${this.baseURL}/transfers/rates?amount=1&destination_currency=KES&source_currency=NGN`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.secretKey}`
+                    }
+                }
+            );
+
+            // KES to NGN
+            const kesToNgnResponse = await axios.get(
+                `${this.baseURL}/transfers/rates?amount=1&destination_currency=NGN&source_currency=KES`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.secretKey}`
+                    }
+                }
+            );
+
+            if (ngnToKesResponse.data.status === 'success' && kesToNgnResponse.data.status === 'success') {
+                const ngnToKsh = parseFloat(ngnToKesResponse.data.data.rate);
+                const kshToNgn = parseFloat(kesToNgnResponse.data.data.rate);
+
+                console.log('✅ Live rates fetched:', { ngnToKsh, kshToNgn });
+
+                return {
+                    success: true,
+                    data: {
+                        ngnToKsh: ngnToKsh,
+                        kshToNgn: kshToNgn,
+                        lastUpdated: new Date().toISOString()
+                    }
+                };
+            } else {
+                throw new Error('Failed to fetch exchange rates');
+            }
+        } catch (error) {
+            console.error('❌ Flutterwave exchange rate error:', error.response?.data || error.message);
+            
+            // Fallback to default rates if API fails
+            return {
+                success: true,
+                data: {
+                    ngnToKsh: 0.18,
+                    kshToNgn: 5.5,
+                    lastUpdated: new Date().toISOString(),
+                    fallback: true
+                }
+            };
+        }
+    }
+
+    /**
+     * Verify a transaction
+     */
+    async verifyTransaction(transactionId) {
+        try {
+            const response = await axios.get(
+                `${this.baseURL}/transactions/${transactionId}/verify`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.secretKey}`
+                    }
+                }
+            );
+
+            return {
+                success: response.data.status === 'success',
+                data: response.data.data
+            };
+        } catch (error) {
+            console.error('❌ Transaction verification error:', error.response?.data || error.message);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
 }
 
 module.exports = new FlutterwaveService();
