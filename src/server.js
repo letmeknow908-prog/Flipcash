@@ -30,20 +30,20 @@ const routes = [
     { name: '/api/v1/wallets', path: './routes/wallet.routes' },
     { name: '/api/v1/transactions', path: './routes/transaction.routes' },
     { name: '/api/v1/webhooks', path: './routes/webhook.routes' },
-    { name: '/api/v1/admin-auth', path: './routes/admin.auth.routes' },  // ← ADD THIS LINE
+    { name: '/api/v1/admin-auth', path: './routes/admin.auth.routes' },
     { name: '/api/v1/admin', path: './routes/admin.routes' }
 ];
 
 routes.forEach(route => {
     try {
-        console.log(`🔍 Attempting to load: ${route.path}`);  // ← FIX: Add (
+        console.log(`🔍 Attempting to load: ${route.path}`);
         const router = require(route.path);
         app.use(route.name, router);
-        console.log(`✅ Loaded route: ${route.name}`);  // ← FIX: Add (
+        console.log(`✅ Loaded route: ${route.name}`);
     } catch (error) {
-        console.log(`❌ FAILED to load ${route.path}:`);  // ← FIX: Add (
-        console.log(`   Error: ${error.message}`);  // ← FIX: Add (
-        console.log(`   Stack: ${error.stack}`);  // ← FIX: Add (
+        console.log(`❌ FAILED to load ${route.path}:`);
+        console.log(`   Error: ${error.message}`);
+        console.log(`   Stack: ${error.stack}`);
     }
 });
 
