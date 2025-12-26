@@ -10,51 +10,57 @@ class FlutterwaveService {
      * Create a virtual account for a user
      */
     async createVirtualAccount(userData) {
-        try {
-            console.log('🏦 Creating Flutterwave virtual account for:', userData.email);
-
-            const response = await axios.post(
-                `${this.baseURL}/virtual-account-numbers`,
-                {
-                    email: userData.email,
-                    is_permanent: true,
-                    bvn: userData.bvn,
-                    tx_ref: `flipcash_${userData.userId}_${Date.now()}`,
-                    firstname: userData.firstName,
-                    lastname: userData.lastName,
-                    narration: `FlipCash - ${userData.firstName} ${userData.lastName}`
-                },
-                {
-                    headers: {
-                        'Authorization': `Bearer ${this.secretKey}`,
-                        'Content-Type': 'application/json'
-                    }
+    try {
+        console.log('🏦 Creating virtual account with Flutterwave...');
+        
+        const payload = {
+            email: userData.email,
+            is_permanent: true,
+            bvn: userData.bvn, // REQUIRED for production
+            tx_ref: userData.tx_ref || `VTU_${Date.now()}`,
+            firstname: userData.firstname || userData.firstName,
+            lastname: userData.lastname || userData.lastName,
+            narration: userData.narration || `${userData.firstname} ${userData.lastname}`
+        };
+        
+        console.log('📤 Flutterwave request:', { 
+            ...payload, 
+            bvn: payload.bvn ? '***hidden***' : 'NOT PROVIDED'
+        });
+        
+        const response = await axios.post(
+            'https://api.flutterwave.com/v3/virtual-account-numbers',
+            payload,
+            {
+                headers: {
+                    'Authorization': `Bearer ${this.secretKey}`,
+                    'Content-Type': 'application/json'
                 }
-            );
-
-            if (response.data.status === 'success') {
-                console.log('✅ Virtual account created:', response.data.data);
-                return {
-                    success: true,
-                    data: {
-                        accountNumber: response.data.data.account_number,
-                        accountName: response.data.data.account_name || `${userData.firstName} ${userData.lastName}`,
-                        bank: response.data.data.bank_name,
-                        flwRef: response.data.data.flw_ref,
-                        orderRef: response.data.data.order_ref
-                    }
-                };
-            } else {
-                throw new Error(response.data.message || 'Failed to create virtual account');
             }
-        } catch (error) {
-            console.error('❌ Flutterwave virtual account error:', error.response?.data || error.message);
+        );
+        
+        console.log('📥 Flutterwave response status:', response.data.status);
+        console.log('📥 Flutterwave response data:', JSON.stringify(response.data.data, null, 2));
+        
+        if (response.data.status === 'success' && response.data.data) {
+            const data = response.data.data;
+            
             return {
-                success: false,
-                error: error.response?.data?.message || error.message
+                account_number: data.account_number,
+                account_name: data.account_name || `${userData.firstname} ${userData.lastname}`,
+                bank_name: data.bank_name || 'Wema Bank',
+                flw_ref: data.flw_ref || data.order_ref,
+                order_ref: data.order_ref
             };
+        } else {
+            console.error('❌ Flutterwave returned non-success status');
+            throw new Error(response.data.message || 'Account creation failed');
         }
+    } catch (error) {
+        console.error('❌ Flutterwave API error:', error.response?.data || error.message);
+        throw new Error(error.response?.data?.message || error.message || 'Failed to create virtual account');
     }
+}
 
     /**
      * Verify BVN details match user information
