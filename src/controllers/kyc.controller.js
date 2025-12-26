@@ -1,58 +1,64 @@
 const db = require('../../config/db');
 
-// Submit KYC
 exports.submitKYC = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const { fullname, dob, address, idType, idNumber, bvn } = req.body;
+        // Get user ID from authenticated request
+        const userId = req.user?.id || req.user?.userId;
+        
+        if (!userId) {
+            console.log('❌ KYC submission failed: No user ID in request');
+            console.log('req.user:', req.user);
+            return res.status(401).json({
+                status: 'error',
+                message: 'User authentication required'
+            });
+        }
+
+        const {
+            fullname,
+            dob,
+            address,
+            idType,
+            idNumber,
+            bvn
+        } = req.body;
 
         // Validate required fields
-        if (!fullname || !dob || !address || !idType || !idNumber) {
+        if (!fullname || !dob || !address || !idType || !idNumber || !bvn) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Please provide all required fields'
+                message: 'All KYC fields are required'
             });
         }
 
-        // Validate age (18+)
-        const birthDate = new Date(dob);
-        const today = new Date();
-        const age = today.getFullYear() - birthDate.getFullYear();
-        
-        if (age < 18) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'You must be at least 18 years old'
-            });
-        }
+        console.log(`📋 KYC submission for user ${userId}`);
 
-        // Check if KYC already exists
-        const existing = await db.query(
+        // Check if user already submitted KYC
+        const existingKYC = await db.query(
             'SELECT id FROM kyc_data WHERE user_id = $1',
             [userId]
         );
 
-        if (existing.rows.length > 0) {
-            // Update existing KYC
-            await db.query(
-                `UPDATE kyc_data 
-                 SET fullname = $1, dob = $2, address = $3, id_type = $4, 
-                     id_number = $5, bvn = $6, kyc_submitted_at = CURRENT_TIMESTAMP
-                 WHERE user_id = $7`,
-                [fullname, dob, address, idType, idNumber, bvn, userId]
-            );
-        } else {
-            // Insert new KYC
-            await db.query(
-                `INSERT INTO kyc_data (user_id, fullname, dob, address, id_type, id_number, bvn, kyc_submitted_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
-                [userId, fullname, dob, address, idType, idNumber, bvn]
-            );
+        if (existingKYC.rows.length > 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'KYC already submitted. Please wait for review.'
+            });
         }
 
-        // Update user KYC status
+        // Insert KYC data
         await db.query(
-            `UPDATE users SET kyc_status = 'pending' WHERE id = $1`,
+            `INSERT INTO kyc_data 
+             (user_id, fullname, dob, address, id_type, id_number, bvn, kyc_submitted_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
+            [userId, fullname, dob, address, idType, idNumber, bvn]
+        );
+
+        // Update user status
+        await db.query(
+            `UPDATE users 
+             SET kyc_status = 'pending' 
+             WHERE id = $1`,
             [userId]
         );
 
@@ -60,63 +66,60 @@ exports.submitKYC = async (req, res) => {
 
         res.status(200).json({
             status: 'success',
-            message: 'KYC submitted successfully. Verification under review.',
-            data: {
-                kycStatus: 'pending',
-                kycVerified: false
-            }
+            message: 'KYC submitted successfully. Your application is under review.'
         });
 
     } catch (error) {
         console.error('❌ KYC submission error:', error);
         res.status(500).json({
             status: 'error',
-            message: 'Failed to submit KYC',
+            message: 'KYC submission failed',
             error: error.message
         });
     }
 };
 
-// Get KYC Status
 exports.getKYCStatus = async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.user?.id || req.user?.userId;
+        
+        if (!userId) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'User authentication required'
+            });
+        }
 
-        // Get user KYC status
-        const userResult = await db.query(
-            'SELECT kyc_status, kyc_verified FROM users WHERE id = $1',
+        const result = await db.query(
+            `SELECT 
+                users.kyc_status,
+                users.kyc_verified,
+                kyc_data.kyc_submitted_at,
+                kyc_data.kyc_approved_at,
+                kyc_data.kyc_rejection_reason
+             FROM users
+             LEFT JOIN kyc_data ON users.id = kyc_data.user_id
+             WHERE users.id = $1`,
             [userId]
         );
 
-        if (userResult.rows.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(404).json({
                 status: 'error',
                 message: 'User not found'
             });
         }
 
-        const user = userResult.rows[0];
-
-        // Get KYC data
-        const kycResult = await db.query(
-            'SELECT * FROM kyc_data WHERE user_id = $1',
-            [userId]
-        );
-
-        const kycData = kycResult.rows.length > 0 ? kycResult.rows[0] : null;
+        const kycStatus = result.rows[0];
 
         res.status(200).json({
             status: 'success',
             data: {
-                kycStatus: user.kyc_status,
-                kycVerified: user.kyc_verified,
-                kycSubmittedAt: kycData?.kyc_submitted_at,
-                fullname: kycData?.fullname,
-                dob: kycData?.dob,
-                address: kycData?.address,
-                idType: kycData?.id_type,
-                idNumber: kycData?.id_number,
-                bvn: kycData?.bvn
+                kycStatus: kycStatus.kyc_status || 'not_submitted',
+                kycVerified: kycStatus.kyc_verified || false,
+                submittedAt: kycStatus.kyc_submitted_at,
+                approvedAt: kycStatus.kyc_approved_at,
+                rejectionReason: kycStatus.kyc_rejection_reason
             }
         });
 
@@ -130,69 +133,7 @@ exports.getKYCStatus = async (req, res) => {
     }
 };
 
-// Approve KYC (Admin)
-exports.approveKYC = async (req, res) => {
-    try {
-        const { userId } = req.params;
-
-        await db.query(
-            `UPDATE users SET kyc_status = 'approved', kyc_verified = TRUE WHERE id = $1`,
-            [userId]
-        );
-
-        await db.query(
-            `UPDATE kyc_data SET kyc_approved_at = CURRENT_TIMESTAMP WHERE user_id = $1`,
-            [userId]
-        );
-
-        console.log(`✅ KYC approved for user ${userId}`);
-
-        res.status(200).json({
-            status: 'success',
-            message: 'KYC approved successfully'
-        });
-
-    } catch (error) {
-        console.error('❌ KYC approval error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to approve KYC',
-            error: error.message
-        });
-    }
+module.exports = {
+    submitKYC: exports.submitKYC,
+    getKYCStatus: exports.getKYCStatus
 };
-
-// Reject KYC (Admin)
-exports.rejectKYC = async (req, res) => {
-    try {
-        const { userId } = req.params;
-        const { reason } = req.body;
-
-        await db.query(
-            `UPDATE users SET kyc_status = 'rejected', kyc_verified = FALSE WHERE id = $1`,
-            [userId]
-        );
-
-        await db.query(
-            `UPDATE kyc_data SET kyc_rejection_reason = $1 WHERE user_id = $2`,
-            [reason, userId]
-        );
-
-        console.log(`❌ KYC rejected for user ${userId}`);
-
-        res.status(200).json({
-            status: 'success',
-            message: 'KYC rejected'
-        });
-
-    } catch (error) {
-        console.error('❌ KYC rejection error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to reject KYC',
-            error: error.message
-        });
-    }
-};
-
-module.exports = exports;
