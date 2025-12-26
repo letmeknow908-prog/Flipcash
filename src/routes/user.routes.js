@@ -1,40 +1,102 @@
 const express = require('express');
 const router = express.Router();
+const authMiddleware = require('../middleware/auth.middleware');
+const kycController = require('../controllers/kyc.controller');
 
-let kycController;
-let authenticateToken;
-
-try {
-    kycController = require('../controllers/kyc.controller');
-} catch (error) {
-    console.error('⚠️ kyc.controller not found:', error.message);
-    kycController = {
-        submitKYC: (req, res) => res.status(501).json({ status: 'error', message: 'KYC controller not implemented' }),
-        getKYCStatus: (req, res) => res.status(501).json({ status: 'error', message: 'KYC controller not implemented' }),
-        approveKYC: (req, res) => res.status(501).json({ status: 'error', message: 'KYC controller not implemented' }),
-        rejectKYC: (req, res) => res.status(501).json({ status: 'error', message: 'KYC controller not implemented' })
-    };
-}
-
-try {
-    const authMiddleware = require('../middleware/auth.middleware');
-    authenticateToken = authMiddleware.authenticateToken || ((req, res, next) => next());
-} catch (error) {
-    console.error('⚠️ auth.middleware not found:', error.message);
-    authenticateToken = (req, res, next) => next();
-}
-
-router.post('/kyc', authenticateToken, kycController.submitKYC);
-router.get('/kyc', authenticateToken, kycController.getKYCStatus);
-router.put('/kyc/:userId/approve', authenticateToken, kycController.approveKYC);
-router.put('/kyc/:userId/reject', authenticateToken, kycController.rejectKYC);
-
-router.get('/test', (req, res) => {
-    res.json({ 
-        status: 'success', 
-        message: 'User routes are working!',
-        routes: ['POST /kyc', 'GET /kyc', 'PUT /kyc/:userId/approve', 'PUT /kyc/:userId/reject']
+// Health check
+router.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'success',
+        message: 'User routes are working'
     });
 });
+
+// Get user profile
+router.get('/profile', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const db = require('../../config/db');
+        
+        const result = await db.query(
+            'SELECT id, first_name, last_name, email, phone, kyc_status, kyc_verified, created_at FROM users WHERE id = $1',
+            [userId]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'User not found'
+            });
+        }
+        
+        res.status(200).json({
+            status: 'success',
+            data: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Get profile error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get profile'
+        });
+    }
+});
+
+// KYC routes
+router.post('/kyc/submit', authMiddleware, kycController.submitKYC);
+router.get('/kyc/status', authMiddleware, kycController.getKYCStatus);
+
+// Get user wallets
+router.get('/wallets', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const db = require('../../config/db');
+        
+        const result = await db.query(
+            'SELECT currency, balance, created_at FROM wallets WHERE user_id = $1',
+            [userId]
+        );
+        
+        res.status(200).json({
+            status: 'success',
+            data: result.rows
+        });
+    } catch (error) {
+        console.error('Get wallets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get wallets'
+        });
+    }
+});
+
+// Get user transactions
+router.get('/transactions', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const db = require('../../config/db');
+        
+        const result = await db.query(
+            `SELECT * FROM transactions 
+             WHERE user_id = $1 
+             ORDER BY created_at DESC 
+             LIMIT 50`,
+            [userId]
+        );
+        
+        res.status(200).json({
+            status: 'success',
+            data: result.rows
+        });
+    } catch (error) {
+        console.error('Get transactions error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get transactions'
+        });
+    }
+});
+
+console.log('✅ User routes loaded');
 
 module.exports = router;
