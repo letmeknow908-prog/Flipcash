@@ -31,58 +31,7 @@ class FlutterwaveService {
                     }
                 }
             );
-    /**
- * Verify BVN details match user information
- */
-async verifyBVN(bvn, firstName, lastName, dob) {
-    try {
-        console.log('🔍 Verifying BVN:', { bvn: bvn.slice(0, 3) + '****', firstName, lastName });
 
-        const response = await axios.post(
-            `${this.baseURL}/kyc/bvns/${bvn}`,
-            {
-                first_name: firstName,
-                last_name: lastName,
-                date_of_birth: dob // Format: YYYY-MM-DD
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${this.secretKey}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
-
-        if (response.data.status === 'success') {
-            const bvnData = response.data.data;
-            
-            console.log('✅ BVN verification result:', {
-                firstNameMatch: bvnData.first_name?.toLowerCase() === firstName.toLowerCase(),
-                lastNameMatch: bvnData.last_name?.toLowerCase() === lastName.toLowerCase()
-            });
-
-            return {
-                success: true,
-                data: {
-                    firstName: bvnData.first_name,
-                    lastName: bvnData.last_name,
-                    dob: bvnData.date_of_birth,
-                    phone: bvnData.phone_number,
-                    match: bvnData.first_name?.toLowerCase() === firstName.toLowerCase() && 
-                           bvnData.last_name?.toLowerCase() === lastName.toLowerCase()
-                }
-            };
-        } else {
-            throw new Error(response.data.message || 'BVN verification failed');
-        }
-    } catch (error) {
-        console.error('❌ BVN verification error:', error.response?.data || error.message);
-        return {
-            success: false,
-            error: error.response?.data?.message || error.message
-        };
-    }
-}
             if (response.data.status === 'success') {
                 console.log('✅ Virtual account created:', response.data.data);
                 return {
@@ -100,6 +49,59 @@ async verifyBVN(bvn, firstName, lastName, dob) {
             }
         } catch (error) {
             console.error('❌ Flutterwave virtual account error:', error.response?.data || error.message);
+            return {
+                success: false,
+                error: error.response?.data?.message || error.message
+            };
+        }
+    }
+
+    /**
+     * Verify BVN details match user information
+     */
+    async verifyBVN(bvn, firstName, lastName, dob) {
+        try {
+            console.log('🔍 Verifying BVN:', { bvn: bvn.slice(0, 3) + '****', firstName, lastName });
+
+            const response = await axios.post(
+                `${this.baseURL}/kyc/bvns/${bvn}`,
+                {
+                    first_name: firstName,
+                    last_name: lastName,
+                    date_of_birth: dob // Format: YYYY-MM-DD
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.secretKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            if (response.data.status === 'success') {
+                const bvnData = response.data.data;
+                
+                console.log('✅ BVN verification result:', {
+                    firstNameMatch: bvnData.first_name?.toLowerCase() === firstName.toLowerCase(),
+                    lastNameMatch: bvnData.last_name?.toLowerCase() === lastName.toLowerCase()
+                });
+
+                return {
+                    success: true,
+                    data: {
+                        firstName: bvnData.first_name,
+                        lastName: bvnData.last_name,
+                        dob: bvnData.date_of_birth,
+                        phone: bvnData.phone_number,
+                        match: bvnData.first_name?.toLowerCase() === firstName.toLowerCase() && 
+                               bvnData.last_name?.toLowerCase() === lastName.toLowerCase()
+                    }
+                };
+            } else {
+                throw new Error(response.data.message || 'BVN verification failed');
+            }
+        } catch (error) {
+            console.error('❌ BVN verification error:', error.response?.data || error.message);
             return {
                 success: false,
                 error: error.response?.data?.message || error.message
