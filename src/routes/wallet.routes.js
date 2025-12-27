@@ -3,8 +3,12 @@ const router = express.Router();
 const authMiddleware = require('../middleware/auth.middleware');
 const db = require('../../config/db');
 
+console.log('🔧 WALLET ROUTES FILE LOADED - NEW VERSION WITH DB QUERY');
+
 // ✅ Get user wallets (FIXED - Now fetches from database)
 router.get('/', authMiddleware, async (req, res) => {
+    console.log('🚨 WALLET ROUTE HANDLER CALLED!');
+    
     try {
         const userId = req.user.id;
         
@@ -36,5 +40,5 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 });
 
-console.log('✅ Wallet routes loaded');
+console.log('✅ Wallet routes loaded - WITH DATABASE QUERY');
 module.exports = router;
