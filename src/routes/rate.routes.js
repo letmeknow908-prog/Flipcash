@@ -18,13 +18,28 @@ async function updateRatesInDatabase() {
         if (ratesResult.success && ratesResult.data) {
             const { ngnToKsh, kshToNgn } = ratesResult.data;
             
-            // ✅ Save to database
+            // ✅ UPDATE or INSERT rates (upsert)
+            // Update NGN → KSH
             await db.query(`
                 INSERT INTO exchange_rates (from_currency, to_currency, rate, source, created_at)
-                VALUES 
-                    ('NGN', 'KSH', $1, 'Flutterwave', NOW()),
-                    ('KSH', 'NGN', $2, 'Flutterwave', NOW())
-            `, [ngnToKsh, kshToNgn]);
+                VALUES ('NGN', 'KSH', $1, 'Flutterwave', NOW())
+                ON CONFLICT (from_currency, to_currency) 
+                DO UPDATE SET 
+                    rate = EXCLUDED.rate,
+                    source = EXCLUDED.source,
+                    created_at = NOW()
+            `, [ngnToKsh]);
+            
+            // Update KSH → NGN
+            await db.query(`
+                INSERT INTO exchange_rates (from_currency, to_currency, rate, source, created_at)
+                VALUES ('KSH', 'NGN', $1, 'Flutterwave', NOW())
+                ON CONFLICT (from_currency, to_currency) 
+                DO UPDATE SET 
+                    rate = EXCLUDED.rate,
+                    source = EXCLUDED.source,
+                    created_at = NOW()
+            `, [kshToNgn]);
             
             console.log('✅ Live rates fetched and saved to DB:', { ngnToKsh, kshToNgn });
             
