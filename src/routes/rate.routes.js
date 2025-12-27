@@ -2,26 +2,105 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth.middleware');
 const flutterwaveService = require('../services/flutterwave.service');
+const db = require('../../config/db');
 
-// GET /api/v1/rates - Get LIVE exchange rates
+console.log('✅ Rate routes loading...');
+
+// ✅ Auto-update rates every 5 minutes
+let rateUpdateInterval;
+
+async function updateRatesInDatabase() {
+    try {
+        console.log('💱 Fetching live exchange rates from Flutterwave...');
+        
+        const ratesResult = await flutterwaveService.getExchangeRates();
+        
+        if (ratesResult.success && ratesResult.data) {
+            const { ngnToKsh, kshToNgn } = ratesResult.data;
+            
+            // ✅ Save to database
+            await db.query(`
+                INSERT INTO exchange_rates (from_currency, to_currency, rate, source, created_at)
+                VALUES 
+                    ('NGN', 'KSH', $1, 'Flutterwave', NOW()),
+                    ('KSH', 'NGN', $2, 'Flutterwave', NOW())
+            `, [ngnToKsh, kshToNgn]);
+            
+            console.log('✅ Live rates fetched and saved to DB:', { ngnToKsh, kshToNgn });
+            
+            return { ngnToKsh, kshToNgn };
+        } else {
+            console.log('⚠️ Failed to fetch rates, using fallback');
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Rate update error:', error.message);
+        return null;
+    }
+}
+
+// ✅ Start auto-update when server starts
+(async function initializeRates() {
+    console.log('🚀 Initializing rate auto-update service...');
+    
+    // Update immediately on startup
+    await updateRatesInDatabase();
+    
+    // Then update every 5 minutes
+    rateUpdateInterval = setInterval(updateRatesInDatabase, 5 * 60 * 1000);
+    
+    console.log('✅ Rate auto-update service started (every 5 minutes)');
+})();
+
+// GET /api/v1/rates - Get latest exchange rates
 router.get('/', async (req, res) => {
     try {
+        // Try to get latest rates from database first
+        const dbRates = await db.query(`
+            SELECT from_currency, to_currency, rate, created_at
+            FROM exchange_rates 
+            WHERE from_currency IN ('NGN', 'KSH')
+            ORDER BY created_at DESC 
+            LIMIT 2
+        `);
+        
+        if (dbRates.rows.length === 2) {
+            // Found rates in database
+            const ngnToKsh = dbRates.rows.find(r => r.from_currency === 'NGN')?.rate || 11.53325175;
+            const kshToNgn = dbRates.rows.find(r => r.from_currency === 'KSH')?.rate || 0.09021803;
+            const lastUpdated = dbRates.rows[0].created_at;
+            
+            return res.status(200).json({
+                status: 'success',
+                data: {
+                    ngnToKsh: parseFloat(ngnToKsh),
+                    kshToNgn: parseFloat(kshToNgn),
+                    lastUpdated,
+                    source: 'database'
+                }
+            });
+        }
+        
+        // Fallback: Fetch fresh rates
         const ratesResult = await flutterwaveService.getExchangeRates();
         
         if (ratesResult.success) {
             res.status(200).json({
                 status: 'success',
-                data: ratesResult.data
+                data: {
+                    ...ratesResult.data,
+                    source: 'live'
+                }
             });
         } else {
-            // Fallback to default rates
+            // Ultimate fallback
             res.status(200).json({
                 status: 'success',
                 data: {
-                    ngnToKsh: 0.18,
-                    kshToNgn: 5.5,
+                    ngnToKsh: 11.53325175,
+                    kshToNgn: 0.09021803,
                     lastUpdated: new Date().toISOString(),
-                    fallback: true
+                    source: 'fallback'
                 }
             });
         }
@@ -30,10 +109,10 @@ router.get('/', async (req, res) => {
         res.status(200).json({
             status: 'success',
             data: {
-                ngnToKsh: 0.18,
-                kshToNgn: 5.5,
+                ngnToKsh: 11.53325175,
+                kshToNgn: 0.09021803,
                 lastUpdated: new Date().toISOString(),
-                fallback: true
+                source: 'fallback'
             }
         });
     }
@@ -43,7 +122,6 @@ router.get('/', async (req, res) => {
 router.post('/account/generate', authMiddleware, async (req, res) => {
     try {
         const userId = req.user.id;
-        const db = require('../../config/db');
         
         console.log('🏦 Virtual account generation request for user:', userId);
         
