@@ -93,30 +93,24 @@ router.post('/swap', authMiddleware, async (req, res) => {
         }
         
         // Get live exchange rate
-// Get live exchange rate (fallback to default if not found)
+
+// Get live exchange rate from exchange_rates table
 let rate;
 try {
-    // Try to get rate from rates table (check what columns actually exist)
-    const rateResult = await db.query('SELECT * FROM rates ORDER BY created_at DESC LIMIT 1');
+    // Query the correct table: exchange_rates
+    const rateResult = await db.query(
+        `SELECT rate FROM exchange_rates 
+         WHERE from_currency = $1 AND to_currency = $2 
+         ORDER BY created_at DESC LIMIT 1`,
+        [fromCurrency, toCurrency]
+    );
     
     if (rateResult.rows.length > 0) {
-        const rateData = rateResult.rows[0];
-        console.log('📊 Rate data from DB:', rateData);
-        
-        if (fromCurrency === 'NGN' && toCurrency === 'KSH') {
-            // Try different possible column names
-            rate = rateData.ngn_to_ksh || rateData.ngnToKsh || rateData.ngn_ksh || 11.53325175;
-        } else if (fromCurrency === 'KSH' && toCurrency === 'NGN') {
-            rate = rateData.ksh_to_ngn || rateData.kshToNgn || rateData.ksh_ngn || 0.09021803;
-        } else {
-            await client.query('ROLLBACK');
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid currency pair'
-            });
-        }
+        rate = parseFloat(rateResult.rows[0].rate);
+        console.log('📊 Rate from DB:', rate, fromCurrency, '→', toCurrency);
     } else {
-        // Use default rates if no data in DB
+        // Fallback to default rates
+        console.log('⚠️ No rate found in DB, using default');
         if (fromCurrency === 'NGN' && toCurrency === 'KSH') {
             rate = 11.53325175;
         } else if (fromCurrency === 'KSH' && toCurrency === 'NGN') {
