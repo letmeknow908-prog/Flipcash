@@ -163,18 +163,17 @@ try {
         
         // Record transaction
         const transactionId = 'SWP' + Date.now();
-        await client.query(
-            `INSERT INTO transactions (user_id, type, currency, amount, status, created_at, description) 
-             VALUES ($1, $2, $3, $4, $5, NOW(), $6)`,
-            [
-                userId, 
-                'swap', 
-                fromCurrency, 
-                swapAmount, 
-                'completed',
-                `Swapped ${swapAmount} ${fromCurrency} to ${finalAmount.toFixed(2)} ${toCurrency}`
-            ]
-        );
+await client.query(
+    `INSERT INTO transactions (user_id, type, currency, amount, status, created_at) 
+     VALUES ($1, $2, $3, $4, $5, NOW())`,
+    [
+        userId, 
+        'swap', 
+        fromCurrency, 
+        swapAmount, 
+        'completed'
+    ]
+);
         
         // Commit transaction
         await client.query('COMMIT');
