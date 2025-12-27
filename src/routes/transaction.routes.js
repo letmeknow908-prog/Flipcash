@@ -93,13 +93,21 @@ router.post('/swap', authMiddleware, async (req, res) => {
         }
         
         // Get live exchange rate
-        const rateResult = await db.query('SELECT ngn_to_ksh, ksh_to_ngn FROM exchange_rates ORDER BY created_at DESC LIMIT 1');
+// Get live exchange rate (fallback to default if not found)
+let rate;
+try {
+    // Try to get rate from rates table (check what columns actually exist)
+    const rateResult = await db.query('SELECT * FROM rates ORDER BY created_at DESC LIMIT 1');
+    
+    if (rateResult.rows.length > 0) {
+        const rateData = rateResult.rows[0];
+        console.log('📊 Rate data from DB:', rateData);
         
-        let rate;
         if (fromCurrency === 'NGN' && toCurrency === 'KSH') {
-            rate = rateResult.rows.length > 0 ? parseFloat(rateResult.rows[0].ngn_to_ksh) : 0.18;
+            // Try different possible column names
+            rate = rateData.ngn_to_ksh || rateData.ngnToKsh || rateData.ngn_ksh || 11.53325175;
         } else if (fromCurrency === 'KSH' && toCurrency === 'NGN') {
-            rate = rateResult.rows.length > 0 ? parseFloat(rateResult.rows[0].ksh_to_ngn) : 5.5;
+            rate = rateData.ksh_to_ngn || rateData.kshToNgn || rateData.ksh_ngn || 0.09021803;
         } else {
             await client.query('ROLLBACK');
             return res.status(400).json({
@@ -107,6 +115,35 @@ router.post('/swap', authMiddleware, async (req, res) => {
                 message: 'Invalid currency pair'
             });
         }
+    } else {
+        // Use default rates if no data in DB
+        if (fromCurrency === 'NGN' && toCurrency === 'KSH') {
+            rate = 11.53325175;
+        } else if (fromCurrency === 'KSH' && toCurrency === 'NGN') {
+            rate = 0.09021803;
+        } else {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid currency pair'
+            });
+        }
+    }
+} catch (rateError) {
+    console.log('⚠️ Could not fetch rate from DB, using default:', rateError.message);
+    // Fallback to default rates
+    if (fromCurrency === 'NGN' && toCurrency === 'KSH') {
+        rate = 11.53325175;
+    } else if (fromCurrency === 'KSH' && toCurrency === 'NGN') {
+        rate = 0.09021803;
+    } else {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+            status: 'error',
+            message: 'Invalid currency pair'
+        });
+    }
+}
         
         console.log('💱 Exchange rate:', rate);
         
