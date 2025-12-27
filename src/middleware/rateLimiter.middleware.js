@@ -7,7 +7,11 @@ const passwordChangeLimit = rateLimit({
     message: {
         status: 'error',
         message: 'Too many password change attempts. Please try again in 15 minutes.'
-    }
+    },
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
+
+console.log('✅ Rate limiter middleware loaded');
 
 module.exports = { passwordChangeLimit };
