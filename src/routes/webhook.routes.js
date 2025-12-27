@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../../config/db');  // ✅ IMPORT DB
+const db = require('../../config/db');
 
 // Flutterwave Webhook Handler
 router.post('/flutterwave', async (req, res) => {
     try {
-        const secretHash = process.env.FLW_WEBHOOK_SECRET;
+        // ✅ FIX: Check both FLW_WEBHOOK_SECRET and FLW_SECRET_HASH
+        const secretHash = process.env.FLW_WEBHOOK_SECRET || process.env.FLW_SECRET_HASH;
         const signature = req.headers['verif-hash'];
         
         console.log('✅ Webhook received from Flutterwave');
