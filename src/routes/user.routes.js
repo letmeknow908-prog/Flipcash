@@ -4,8 +4,7 @@ const authMiddleware = require('../middleware/auth.middleware');
 const kycController = require('../controllers/kyc.controller');
 const db = require('../../config/db');
 const bcrypt = require('bcryptjs');
-const { passwordChangeLimit } = require('../middleware/rateLimiter.middleware');  // ✅ ADD THIS
-
+    
 // Health check
 router.get('/health', (req, res) => {
     res.status(200).json({
@@ -189,7 +188,8 @@ router.get('/transactions', authMiddleware, async (req, res) => {
 });
 
 // ✅ SECURE Change Password Endpoint with Rate Limiting
-router.post('/change-password', authMiddleware, passwordChangeLimit, async (req, res) => {  // ✅ ADDED passwordChangeLimit
+router.post('/change-password', authMiddleware, async (req, res) => {
+    
     try {
         const { currentPassword, newPassword } = req.body;
         const userId = req.user.id;
