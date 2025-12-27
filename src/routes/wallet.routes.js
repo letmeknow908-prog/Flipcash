@@ -5,25 +5,21 @@ const db = require('../../config/db');
 
 console.log('🔧 WALLET ROUTES FILE LOADED - NEW VERSION WITH DB QUERY');
 
-// ✅ Get user wallets (FIXED - Now fetches from database)
 router.get('/', authMiddleware, async (req, res) => {
     console.log('🚨 WALLET ROUTE HANDLER CALLED!');
     
     try {
         const userId = req.user.id;
-        
         console.log('🔍 Fetching wallets for user ID:', userId);
         
-        // ✅ Query actual database
         const result = await db.query(
-            'SELECT currency, balance, created_at, updated_at FROM wallets WHERE user_id = $1 ORDER BY currency',
+            'SELECT currency, balance FROM wallets WHERE user_id = $1 ORDER BY currency',
             [userId]
         );
         
         console.log('📊 Database returned:', result.rows.length, 'wallets');
         console.log('💰 Wallet data:', JSON.stringify(result.rows));
         
-        // ✅ Return real data from database
         res.status(200).json({
             status: 'success',
             data: {
