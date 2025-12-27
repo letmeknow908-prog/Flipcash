@@ -1,15 +1,22 @@
 {
   "name": "flipcash-backend",
-  "version": "1.0.1",
-  "description": "FlipCash Currency Exchange Backend",
+  "version": "1.0.2",
+  "description": "FlipCash Currency Exchange Backend - Complete with Security Features",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "migrate": "node scripts/migrate.js"
+    "migrate": "node scripts/migrate.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "currency-exchange",
+    "fintech",
+    "flutterwave",
+    "mpesa",
+    "crypto"
+  ],
+  "author": "FlipCash Team",
   "license": "ISC",
   "dependencies": {
     "express": "^4.18.2",
@@ -21,12 +28,14 @@
     "axios": "^1.6.0",
     "redis": "^4.6.10",
     "body-parser": "^1.20.2",
-    "flutterwave-node-v3": "^1.1.11"
+    "flutterwave-node-v3": "^1.1.11",
+    "express-rate-limit": "^7.1.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }
