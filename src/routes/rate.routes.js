@@ -47,10 +47,15 @@ async function updateRatesInDatabase() {
 }
 
 // ✅ Start auto-update when server starts
+// ✅ Start auto-update when server starts
 (async function initializeRates() {
     console.log('🚀 Initializing rate auto-update service...');
     
-    // Update immediately on startup
+    // Wait 10 seconds before first update (let server fully start)
+    console.log('⏳ Waiting 10 seconds before first rate update...');
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    
+    // Update after delay
     await updateRatesInDatabase();
     
     // Then update every 5 minutes
