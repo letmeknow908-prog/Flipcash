@@ -65,28 +65,26 @@ class FlutterwaveService {
      * Process M-Pesa/Airtel Money payout (REAL WITHDRAWAL)
      */
 async processKenyaPayout(withdrawalData) {
+    console.log('🔍 [FLUTTERWAVE DEBUG] ========== START ==========');
+    
     try {
         const { amount, phone, beneficiaryName, method, userId, currency } = withdrawalData;
         
-        console.log('🔍 [FLUTTERWAVE DEBUG] Step 1: Function called');
-        console.log('📋 Input data:', JSON.stringify(withdrawalData, null, 2));
+        console.log('📋 [FLUTTERWAVE DEBUG] Input data:', JSON.stringify(withdrawalData, null, 2));
 
         // Validate inputs
         if (!phone.startsWith('+254') || phone.length !== 13) {
             console.log('❌ [FLUTTERWAVE DEBUG] Invalid phone format');
             throw new Error('Invalid phone number format. Must be +254XXXXXXXXX');
         }
-        console.log('✅ [FLUTTERWAVE DEBUG] Phone validation passed');
 
         if (!beneficiaryName || beneficiaryName.length < 3) {
             console.log('❌ [FLUTTERWAVE DEBUG] Invalid beneficiary name');
             throw new Error('Beneficiary name is required');
         }
-        console.log('✅ [FLUTTERWAVE DEBUG] Beneficiary name validation passed');
 
-        // Flutterwave M-Pesa/Airtel payout payload
         const payload = {
-            account_bank: method === 'AIRTEL' ? 'MPS' : 'MPS',
+            account_bank: 'MPS',
             account_number: phone,
             amount: parseFloat(amount),
             currency: 'KES',
@@ -97,88 +95,115 @@ async processKenyaPayout(withdrawalData) {
             debit_currency: 'KES'
         };
 
-        console.log('📤 [FLUTTERWAVE DEBUG] Sending request to Flutterwave...');
-        console.log('🔑 API Key (first 20 chars):', this.secretKey.substring(0, 20) + '...');
-        console.log('🌐 URL:', `${this.baseURL}/transfers`);
-        console.log('📦 Payload:', JSON.stringify(payload, null, 2));
+        console.log('📤 [FLUTTERWAVE DEBUG] About to send request...');
+        console.log('🌐 [FLUTTERWAVE DEBUG] URL:', `${this.baseURL}/transfers`);
+        console.log('📦 [FLUTTERWAVE DEBUG] Payload:', JSON.stringify(payload, null, 2));
+        console.log('⏱️  [FLUTTERWAVE DEBUG] Starting axios request NOW...');
 
-        const response = await axios.post(
-            `${this.baseURL}/transfers`,
-            payload,
-            {
-                headers: {
-                    'Authorization': `Bearer ${this.secretKey}`,
-                    'Content-Type': 'application/json'
-                },
-                timeout: 30000, // 30 second timeout
-                validateStatus: function (status) {
-                    return true; // Don't throw on any status code
+        let response;
+        try {
+            response = await axios.post(
+                `${this.baseURL}/transfers`,
+                payload,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.secretKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 30000,
+                    validateStatus: () => true
                 }
-            }
-        );
+            );
+            console.log('✅ [FLUTTERWAVE DEBUG] axios.post() completed without throwing');
+        } catch (axiosError) {
+            console.log('❌ [FLUTTERWAVE DEBUG] axios.post() THREW AN ERROR');
+            console.log('❌ Error type:', axiosError.constructor.name);
+            console.log('❌ Error message:', axiosError.message);
+            console.log('❌ Error code:', axiosError.code);
+            throw axiosError;
+        }
 
-        console.log('📥 [FLUTTERWAVE DEBUG] Raw response received');
-        console.log('📊 HTTP Status:', response.status);
-        console.log('📦 Response body:', JSON.stringify(response.data, null, 2));
-        console.log('🔍 Response status field:', response.data?.status);
-        console.log('🔍 Response message field:', response.data?.message);
+        console.log('📥 [FLUTTERWAVE DEBUG] Response object exists:', !!response);
+        console.log('📊 [FLUTTERWAVE DEBUG] HTTP Status:', response?.status);
+        
+        try {
+            console.log('📦 [FLUTTERWAVE DEBUG] Response data:', JSON.stringify(response.data, null, 2));
+        } catch (stringifyError) {
+            console.log('❌ [FLUTTERWAVE DEBUG] Could not stringify response.data');
+            console.log('❌ Stringify error:', stringifyError.message);
+            console.log('📦 [FLUTTERWAVE DEBUG] Response data (raw):', response.data);
+        }
 
-        // Handle non-2xx status codes
         if (response.status >= 400) {
-            console.log('❌ [FLUTTERWAVE DEBUG] HTTP error status detected');
-            throw new Error(response.data?.message || `HTTP ${response.status}: ${JSON.stringify(response.data)}`);
+            console.log('❌ [FLUTTERWAVE DEBUG] HTTP error status detected:', response.status);
+            const errorMsg = response.data?.message || `HTTP ${response.status}`;
+            console.log('❌ [FLUTTERWAVE DEBUG] Throwing error:', errorMsg);
+            throw new Error(errorMsg);
         }
 
         if (response.data.status === 'success') {
-            console.log('✅ [FLUTTERWAVE DEBUG] Payout successful');
-            return {
+            console.log('✅ [FLUTTERWAVE DEBUG] SUCCESS response detected');
+            const result = {
                 success: true,
-                transactionId: response.data.data.id,
-                reference: response.data.data.reference,
-                status: response.data.data.status,
+                transactionId: response.data.data?.id,
+                reference: response.data.data?.reference,
+                status: response.data.data?.status,
                 message: 'Withdrawal initiated successfully'
             };
+            console.log('✅ [FLUTTERWAVE DEBUG] Returning:', JSON.stringify(result, null, 2));
+            return result;
         } else {
-            console.log('❌ [FLUTTERWAVE DEBUG] Payout failed - non-success status');
-            console.log('❌ Exact error message:', response.data.message);
+            console.log('❌ [FLUTTERWAVE DEBUG] Non-success status:', response.data.status);
+            console.log('❌ [FLUTTERWAVE DEBUG] Error message:', response.data.message);
             throw new Error(response.data.message || 'Payout failed');
         }
+        
     } catch (error) {
-        console.error('❌ [FLUTTERWAVE DEBUG] EXCEPTION in processKenyaPayout');
-        console.error('❌ Error type:', error.constructor.name);
-        console.error('❌ Error message:', error.message);
-        console.error('❌ Error code:', error.code);
+        console.error('❌ [FLUTTERWAVE DEBUG] ========== EXCEPTION ==========');
+        console.error('❌ Error name:', error?.name);
+        console.error('❌ Error constructor:', error?.constructor?.name);
+        console.error('❌ Error message:', error?.message);
+        console.error('❌ Error code:', error?.code);
+        console.error('❌ Error stack:', error?.stack?.substring(0, 500));
         
-        if (error.code === 'ECONNABORTED') {
-            console.error('❌ Request TIMEOUT - Flutterwave took too long to respond');
+        if (error?.code === 'ECONNABORTED') {
+            console.error('❌ TIMEOUT - Flutterwave did not respond within 30 seconds');
         }
         
-        if (error.response) {
-            console.error('❌ HTTP Status:', error.response.status);
-            console.error('❌ Response data:', JSON.stringify(error.response.data, null, 2));
-            console.error('❌ Response headers:', JSON.stringify(error.response.headers, null, 2));
-        } else if (error.request) {
-            console.error('❌ No response received from Flutterwave');
-            console.error('❌ Request config:', JSON.stringify({
-                url: error.config?.url,
-                method: error.config?.method,
-                headers: error.config?.headers
-            }, null, 2));
+        if (error?.response) {
+            console.error('❌ Has error.response - HTTP error occurred');
+            console.error('❌ Response status:', error.response.status);
+            try {
+                console.error('❌ Response data:', JSON.stringify(error.response.data, null, 2));
+            } catch (e) {
+                console.error('❌ Response data (could not stringify):', error.response.data);
+            }
+        } else if (error?.request) {
+            console.error('❌ Has error.request - Request sent but no response');
+            console.error('❌ Request URL:', error?.config?.url);
+            console.error('❌ Request method:', error?.config?.method);
+        } else {
+            console.error('❌ No error.response or error.request - exception before request');
         }
         
-        return {
+        const returnValue = {
             success: false,
-            error: error.response?.data?.message || error.message,
+            error: error?.response?.data?.message || error?.message || 'Unknown error',
             errorDetails: {
-                errorType: error.constructor.name,
-                errorCode: error.code,
-                httpStatus: error.response?.status,
-                responseData: error.response?.data,
-                originalError: error.message,
-                timedOut: error.code === 'ECONNABORTED'
+                errorType: error?.constructor?.name,
+                errorCode: error?.code,
+                httpStatus: error?.response?.status,
+                message: error?.message
             },
             shouldRefund: true
         };
+        
+        console.error('❌ [FLUTTERWAVE DEBUG] Returning error object:', JSON.stringify(returnValue, null, 2));
+        console.log('🔍 [FLUTTERWAVE DEBUG] ========== END (ERROR) ==========');
+        return returnValue;
+        
+    } finally {
+        console.log('🔍 [FLUTTERWAVE DEBUG] ========== FINALLY BLOCK ==========');
     }
 }
 
