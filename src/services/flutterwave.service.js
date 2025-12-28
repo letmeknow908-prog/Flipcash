@@ -64,28 +64,34 @@ class FlutterwaveService {
     /**
      * Process M-Pesa/Airtel Money payout (REAL WITHDRAWAL)
      */
-    async processKenyaPayout(withdrawalData) {
+     async processKenyaPayout(withdrawalData) {
         try {
-            const { amount, phone, method, userId, currency } = withdrawalData;
+            const { amount, phone, beneficiaryName, method, userId, currency } = withdrawalData;
             
             console.log('💸 Processing Kenya payout:', {
                 amount,
                 phone,
+                beneficiaryName,
                 method,
                 userId
             });
 
-            // Validate phone number format
+            // Validate inputs
             if (!phone.startsWith('+254') || phone.length !== 13) {
                 throw new Error('Invalid phone number format. Must be +254XXXXXXXXX');
             }
 
+            if (!beneficiaryName || beneficiaryName.length < 3) {
+                throw new Error('Beneficiary name is required');
+            }
+
             // Flutterwave M-Pesa/Airtel payout payload
             const payload = {
-                account_bank: method === 'AIRTEL' ? 'MPS' : 'MPS', // MPS for M-Pesa
+                account_bank: method === 'AIRTEL' ? 'MPS' : 'MPS',
                 account_number: phone,
                 amount: parseFloat(amount),
                 currency: 'KES',
+                beneficiary_name: beneficiaryName,
                 narration: `FlipCash withdrawal`,
                 reference: `WTH_${Date.now()}`,
                 callback_url: `${process.env.BACKEND_URL}/api/v1/webhooks/withdrawal-callback`,
