@@ -2,43 +2,43 @@ const axios = require('axios');
 
 class ExchangeRatesService {
     constructor() {
-        this.apiKey = '3dad52876ca5008378b1b0d6';
+        // ✅ FREE API - No key needed!
         this.baseURL = 'https://open.er-api.com/v6/latest';
-        this.markup = 0.02; // 2% markup on rates
+        this.markup = 0.02; // 2% markup
     }
 
-    /**
-     * Get live NGN → KES exchange rate with markup
-     */
     async getLiveRates() {
         try {
-            console.log('💱 Fetching live FX rates from ExchangeRatesAPI...');
+            console.log('💱 Fetching live FX rates from open.er-api.com...');
             
-            // Fetch latest rates with EUR as base
-            const response = await axios.get(`${this.baseURL}/latest`, {
-                params: {
-                    access_key: this.apiKey,
-                    symbols: 'NGN,KES',
-                    format: 1
-                }
+            // ✅ FIXED: Use parentheses, not backticks!
+            const response = await axios.get(`${this.baseURL}/USD`, {
+                timeout: 10000
             });
 
-            if (response.data.success) {
-                const eurToNgn = response.data.rates.NGN;
-                const eurToKes = response.data.rates.KES;
+            console.log('📡 Exchange rate API response status:', response.status);
+
+            if (response.data && response.data.rates) {
+                const usdToNgn = response.data.rates.NGN;
+                const usdToKes = response.data.rates.KES;
+                
+                if (!usdToNgn || !usdToKes) {
+                    throw new Error('Missing NGN or KES rates in response');
+                }
                 
                 // Calculate cross rate: NGN → KES
-                const ngnToKesRaw = eurToKes / eurToNgn;
-                const kesToNgnRaw = eurToNgn / eurToKes;
+                const ngnToKesRaw = usdToKes / usdToNgn;
+                const kesToNgnRaw = usdToNgn / usdToKes;
                 
                 // Apply 2% markup
                 const ngnToKes = ngnToKesRaw * (1 + this.markup);
                 const kesToNgn = kesToNgnRaw * (1 - this.markup);
                 
-                console.log('✅ Live rates with 2% markup:', {
-                    ngnToKes: ngnToKes.toFixed(4),
-                    kesToNgn: kesToNgn.toFixed(4),
-                    rawRate: ngnToKesRaw.toFixed(4),
+                console.log('✅ Live rates calculated:', {
+                    usdToNgn: usdToNgn.toFixed(2),
+                    usdToKes: usdToKes.toFixed(2),
+                    ngnToKesRaw: ngnToKesRaw.toFixed(4),
+                    ngnToKesWithMarkup: ngnToKes.toFixed(4),
                     markup: `${this.markup * 100}%`
                 });
 
@@ -48,21 +48,20 @@ class ExchangeRatesService {
                         ngnToKsh: parseFloat(ngnToKes.toFixed(4)),
                         kshToNgn: parseFloat(kesToNgn.toFixed(4)),
                         lastUpdated: new Date().toISOString(),
-                        source: 'ExchangeRatesAPI',
+                        source: 'open.er-api.com',
                         markup: this.markup
                     }
                 };
             } else {
-                throw new Error('API returned non-success status');
+                throw new Error('API returned invalid data');
             }
         } catch (error) {
-            console.error('❌ ExchangeRatesAPI error:', error.message);
+            console.error('❌ Exchange rate API error:', error.message);
             
-            // Fallback to safe default rates
             return {
                 success: false,
                 data: {
-                    ngnToKsh: 0.29, // Safe fallback
+                    ngnToKsh: 0.29,
                     kshToNgn: 3.45,
                     lastUpdated: new Date().toISOString(),
                     source: 'fallback',
