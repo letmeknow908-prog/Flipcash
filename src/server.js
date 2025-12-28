@@ -47,6 +47,15 @@ routes.forEach(route => {
     }
 });
 
+// System routes (IP detection)
+try {
+    const systemRoutes = require('./routes/system.routes');
+    app.use('/api/v1/system', systemRoutes);
+    console.log('✅ Loaded route: /api/v1/system');
+} catch (error) {
+    console.log('⚠️ System routes not found');
+}
+
 // Built-in rate routes
 try {
     const rateRoutes = require('./routes/rate.routes');
