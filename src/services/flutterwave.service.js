@@ -64,76 +64,95 @@ class FlutterwaveService {
     /**
      * Process M-Pesa/Airtel Money payout (REAL WITHDRAWAL)
      */
-     async processKenyaPayout(withdrawalData) {
-        try {
-            const { amount, phone, beneficiaryName, method, userId, currency } = withdrawalData;
-            
-            console.log('💸 Processing Kenya payout:', {
-                amount,
-                phone,
-                beneficiaryName,
-                method,
-                userId
-            });
+async processKenyaPayout(withdrawalData) {
+    try {
+        const { amount, phone, beneficiaryName, method, userId, currency } = withdrawalData;
+        
+        console.log('🔍 [FLUTTERWAVE DEBUG] Step 1: Function called');
+        console.log('📋 Input data:', JSON.stringify(withdrawalData, null, 2));
 
-            // Validate inputs
-            if (!phone.startsWith('+254') || phone.length !== 13) {
-                throw new Error('Invalid phone number format. Must be +254XXXXXXXXX');
-            }
-
-            if (!beneficiaryName || beneficiaryName.length < 3) {
-                throw new Error('Beneficiary name is required');
-            }
-
-            // Flutterwave M-Pesa/Airtel payout payload
-            const payload = {
-                account_bank: method === 'AIRTEL' ? 'MPS' : 'MPS',
-                account_number: phone,
-                amount: parseFloat(amount),
-                currency: 'KES',
-                beneficiary_name: beneficiaryName,
-                narration: `FlipCash withdrawal`,
-                reference: `WTH_${Date.now()}`,
-                callback_url: `${process.env.BACKEND_URL}/api/v1/webhooks/withdrawal-callback`,
-                debit_currency: 'KES'
-            };
-
-            console.log('📤 Sending payout request to Flutterwave...');
-
-            const response = await axios.post(
-                `${this.baseURL}/transfers`,
-                payload,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${this.secretKey}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            console.log('📥 Flutterwave payout response:', response.data);
-
-            if (response.data.status === 'success') {
-                return {
-                    success: true,
-                    transactionId: response.data.data.id,
-                    reference: response.data.data.reference,
-                    status: response.data.data.status,
-                    message: 'Withdrawal initiated successfully'
-                };
-            } else {
-                throw new Error(response.data.message || 'Payout failed');
-            }
-        } catch (error) {
-            console.error('❌ Kenya payout error:', error.response?.data || error.message);
-            
-            return {
-                success: false,
-                error: error.response?.data?.message || error.message,
-                shouldRefund: true
-            };
+        // Validate inputs
+        if (!phone.startsWith('+254') || phone.length !== 13) {
+            console.log('❌ [FLUTTERWAVE DEBUG] Invalid phone format');
+            throw new Error('Invalid phone number format. Must be +254XXXXXXXXX');
         }
+        console.log('✅ [FLUTTERWAVE DEBUG] Phone validation passed');
+
+        if (!beneficiaryName || beneficiaryName.length < 3) {
+            console.log('❌ [FLUTTERWAVE DEBUG] Invalid beneficiary name');
+            throw new Error('Beneficiary name is required');
+        }
+        console.log('✅ [FLUTTERWAVE DEBUG] Beneficiary name validation passed');
+
+        // Flutterwave M-Pesa/Airtel payout payload
+        const payload = {
+            account_bank: method === 'AIRTEL' ? 'MPS' : 'MPS',
+            account_number: phone,
+            amount: parseFloat(amount),
+            currency: 'KES',
+            beneficiary_name: beneficiaryName,
+            narration: `FlipCash withdrawal`,
+            reference: `WTH_${Date.now()}`,
+            callback_url: `${process.env.BACKEND_URL}/api/v1/webhooks/withdrawal-callback`,
+            debit_currency: 'KES'
+        };
+
+        console.log('📤 [FLUTTERWAVE DEBUG] Sending request to Flutterwave...');
+        console.log('🔑 API Key (first 20 chars):', this.secretKey.substring(0, 20) + '...');
+        console.log('🌐 URL:', `${this.baseURL}/transfers`);
+        console.log('📦 Payload:', JSON.stringify(payload, null, 2));
+
+        const response = await axios.post(
+            `${this.baseURL}/transfers`,
+            payload,
+            {
+                headers: {
+                    'Authorization': `Bearer ${this.secretKey}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        console.log('📥 [FLUTTERWAVE DEBUG] Response received');
+        console.log('📊 Status code:', response.status);
+        console.log('📦 Response data:', JSON.stringify(response.data, null, 2));
+
+        if (response.data.status === 'success') {
+            console.log('✅ [FLUTTERWAVE DEBUG] Payout successful');
+            return {
+                success: true,
+                transactionId: response.data.data.id,
+                reference: response.data.data.reference,
+                status: response.data.data.status,
+                message: 'Withdrawal initiated successfully'
+            };
+        } else {
+            console.log('❌ [FLUTTERWAVE DEBUG] Payout failed - non-success status');
+            throw new Error(response.data.message || 'Payout failed');
+        }
+    } catch (error) {
+        console.error('❌ [FLUTTERWAVE DEBUG] EXCEPTION in processKenyaPayout');
+        console.error('❌ Error type:', error.constructor.name);
+        console.error('❌ Error message:', error.message);
+        
+        if (error.response) {
+            console.error('❌ HTTP Status:', error.response.status);
+            console.error('❌ Response data:', JSON.stringify(error.response.data, null, 2));
+            console.error('❌ Response headers:', JSON.stringify(error.response.headers, null, 2));
+        }
+        
+        return {
+            success: false,
+            error: error.response?.data?.message || error.message,
+            errorDetails: {
+                httpStatus: error.response?.status,
+                responseData: error.response?.data,
+                originalError: error.message
+            },
+            shouldRefund: true
+        };
     }
+}
 
     /**
      * Verify payout status
