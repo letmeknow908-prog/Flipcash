@@ -209,6 +209,7 @@ await client.query(
 });
 
 // ✅ Withdraw (REAL - Updates database)
+// ✅ Withdraw (REAL M-Pesa/Airtel processing)
 router.post('/withdraw', authMiddleware, async (req, res) => {
     const client = await db.connect();
     
@@ -217,7 +218,6 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
         const { currency, amount, phone, method } = req.body;
         
         console.log('💸 Processing withdrawal for user:', userId);
-        console.log('💸 Amount:', amount, currency, 'to', phone);
         
         if (!currency || !amount || !phone) {
             return res.status(400).json({
@@ -225,20 +225,12 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
                 message: 'Missing required fields'
             });
         }
-        
+
         const withdrawAmount = parseFloat(amount);
         
-        if (withdrawAmount <= 0) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Amount must be greater than 0'
-            });
-        }
-        
-        // Start transaction
         await client.query('BEGIN');
         
-        // Check wallet balance
+        // Check balance
         const wallet = await client.query(
             'SELECT balance FROM wallets WHERE user_id = $1 AND currency = $2',
             [userId, currency]
@@ -253,14 +245,14 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
         }
         
         const currentBalance = parseFloat(wallet.rows[0].balance);
-        const fee = withdrawAmount * 0.02; // 2% fee
+        const fee = withdrawAmount * 0.02;
         const totalRequired = withdrawAmount + fee;
         
         if (currentBalance < totalRequired) {
             await client.query('ROLLBACK');
             return res.status(400).json({
                 status: 'error',
-                message: `Insufficient balance. Required: ${totalRequired.toFixed(2)} ${currency}, Available: ${currentBalance.toFixed(2)} ${currency}`
+                message: `Insufficient balance`
             });
         }
         
@@ -270,47 +262,61 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
             [totalRequired, userId, currency]
         );
         
-        // Record transaction
-        const transactionId = 'WTH' + Date.now();
-        await client.query(
-            `INSERT INTO transactions (user_id, type, currency, amount, status, created_at, description) 
-             VALUES ($1, $2, $3, $4, $5, NOW(), $6)`,
-            [
-                userId, 
-                'withdraw', 
-                currency, 
-                withdrawAmount, 
-                'pending',
-                `Withdrawal to ${phone} via ${method || 'M-Pesa'}`
-            ]
-        );
-        
-        // Commit transaction
-        await client.query('COMMIT');
-        
-        console.log('✅ Withdrawal initiated');
-        
-        res.json({
-            status: 'success',
-            message: `Withdrawal to ${method || 'M-Pesa'} initiated successfully`,
-            data: {
-                transactionId,
-                currency,
-                amount: withdrawAmount,
-                fee,
-                total: totalRequired,
-                phone,
-                method: method || 'M-Pesa',
-                status: 'pending'
-            }
+        // Process payout via Flutterwave
+        const flutterwaveService = require('../services/flutterwave.service');
+        const payoutResult = await flutterwaveService.processKenyaPayout({
+            amount: withdrawAmount,
+            phone,
+            method: method || 'MPESA',
+            userId,
+            currency
         });
+
+        if (payoutResult.success) {
+            // Record transaction
+            const transactionId = 'WTH' + Date.now();
+            await client.query(
+                `INSERT INTO transactions (user_id, type, currency, amount, status, created_at, description) 
+                 VALUES ($1, $2, $3, $4, $5, NOW(), $6)`,
+                [
+                    userId, 
+                    'withdraw', 
+                    currency, 
+                    withdrawAmount, 
+                    'processing',
+                    `Withdrawal to ${phone} - ${payoutResult.reference}`
+                ]
+            );
+            
+            await client.query('COMMIT');
+            
+            res.json({
+                status: 'success',
+                message: `Withdrawal initiated successfully`,
+                data: {
+                    transactionId,
+                    reference: payoutResult.reference,
+                    amount: withdrawAmount,
+                    fee,
+                    total: totalRequired
+                }
+            });
+        } else {
+            // Refund if payout failed
+            await client.query('ROLLBACK');
+            
+            res.status(500).json({
+                status: 'error',
+                message: payoutResult.error || 'Withdrawal failed'
+            });
+        }
         
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('❌ Withdrawal error:', error);
         res.status(500).json({
             status: 'error',
-            message: 'Withdrawal failed. Please try again.'
+            message: 'Withdrawal failed'
         });
     } finally {
         client.release();
