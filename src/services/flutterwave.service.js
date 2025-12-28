@@ -109,13 +109,25 @@ async processKenyaPayout(withdrawalData) {
                 headers: {
                     'Authorization': `Bearer ${this.secretKey}`,
                     'Content-Type': 'application/json'
+                },
+                timeout: 30000, // 30 second timeout
+                validateStatus: function (status) {
+                    return true; // Don't throw on any status code
                 }
             }
         );
 
-        console.log('📥 [FLUTTERWAVE DEBUG] Response received');
-        console.log('📊 Status code:', response.status);
-        console.log('📦 Response data:', JSON.stringify(response.data, null, 2));
+        console.log('📥 [FLUTTERWAVE DEBUG] Raw response received');
+        console.log('📊 HTTP Status:', response.status);
+        console.log('📦 Response body:', JSON.stringify(response.data, null, 2));
+        console.log('🔍 Response status field:', response.data?.status);
+        console.log('🔍 Response message field:', response.data?.message);
+
+        // Handle non-2xx status codes
+        if (response.status >= 400) {
+            console.log('❌ [FLUTTERWAVE DEBUG] HTTP error status detected');
+            throw new Error(response.data?.message || `HTTP ${response.status}: ${JSON.stringify(response.data)}`);
+        }
 
         if (response.data.status === 'success') {
             console.log('✅ [FLUTTERWAVE DEBUG] Payout successful');
@@ -128,26 +140,42 @@ async processKenyaPayout(withdrawalData) {
             };
         } else {
             console.log('❌ [FLUTTERWAVE DEBUG] Payout failed - non-success status');
+            console.log('❌ Exact error message:', response.data.message);
             throw new Error(response.data.message || 'Payout failed');
         }
     } catch (error) {
         console.error('❌ [FLUTTERWAVE DEBUG] EXCEPTION in processKenyaPayout');
         console.error('❌ Error type:', error.constructor.name);
         console.error('❌ Error message:', error.message);
+        console.error('❌ Error code:', error.code);
+        
+        if (error.code === 'ECONNABORTED') {
+            console.error('❌ Request TIMEOUT - Flutterwave took too long to respond');
+        }
         
         if (error.response) {
             console.error('❌ HTTP Status:', error.response.status);
             console.error('❌ Response data:', JSON.stringify(error.response.data, null, 2));
             console.error('❌ Response headers:', JSON.stringify(error.response.headers, null, 2));
+        } else if (error.request) {
+            console.error('❌ No response received from Flutterwave');
+            console.error('❌ Request config:', JSON.stringify({
+                url: error.config?.url,
+                method: error.config?.method,
+                headers: error.config?.headers
+            }, null, 2));
         }
         
         return {
             success: false,
             error: error.response?.data?.message || error.message,
             errorDetails: {
+                errorType: error.constructor.name,
+                errorCode: error.code,
                 httpStatus: error.response?.status,
                 responseData: error.response?.data,
-                originalError: error.message
+                originalError: error.message,
+                timedOut: error.code === 'ECONNABORTED'
             },
             shouldRefund: true
         };
