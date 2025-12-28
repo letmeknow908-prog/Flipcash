@@ -215,14 +215,15 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
     
     try {
         const userId = req.user.id;
-        const { currency, amount, phone, method } = req.body;
+        const { currency, amount, phone, beneficiaryName, method } = req.body;
         
         console.log('💸 Processing withdrawal for user:', userId);
+        console.log('📋 Withdrawal details:', { amount, phone, beneficiaryName, method });
         
-        if (!currency || !amount || !phone) {
+        if (!currency || !amount || !phone || !beneficiaryName) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Missing required fields'
+                message: 'Missing required fields: currency, amount, phone, beneficiaryName'
             });
         }
 
@@ -252,7 +253,7 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
             await client.query('ROLLBACK');
             return res.status(400).json({
                 status: 'error',
-                message: `Insufficient balance`
+                message: `Insufficient balance. Required: ${totalRequired.toFixed(2)} ${currency}, Available: ${currentBalance.toFixed(2)} ${currency}`
             });
         }
         
@@ -267,6 +268,7 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
         const payoutResult = await flutterwaveService.processKenyaPayout({
             amount: withdrawAmount,
             phone,
+            beneficiaryName,
             method: method || 'MPESA',
             userId,
             currency
@@ -284,7 +286,7 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
                     currency, 
                     withdrawAmount, 
                     'processing',
-                    `Withdrawal to ${phone} - ${payoutResult.reference}`
+                    `Withdrawal to ${beneficiaryName} (${phone}) - ${payoutResult.reference}`
                 ]
             );
             
@@ -292,10 +294,12 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
             
             res.json({
                 status: 'success',
-                message: `Withdrawal initiated successfully`,
+                message: `Withdrawal sent to ${beneficiaryName}`,
                 data: {
                     transactionId,
                     reference: payoutResult.reference,
+                    recipient: beneficiaryName,
+                    phone,
                     amount: withdrawAmount,
                     fee,
                     total: totalRequired
@@ -316,7 +320,7 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
         console.error('❌ Withdrawal error:', error);
         res.status(500).json({
             status: 'error',
-            message: 'Withdrawal failed'
+            message: 'Withdrawal failed. Please try again.'
         });
     } finally {
         client.release();
