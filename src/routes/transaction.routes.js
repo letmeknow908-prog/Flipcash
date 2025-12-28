@@ -208,8 +208,6 @@ await client.query(
     }
 });
 
-// ✅ Withdraw (REAL - Updates database)
-// ✅ Withdraw (REAL M-Pesa/Airtel processing)
 router.post('/withdraw', authMiddleware, async (req, res) => {
     const client = await db.connect();
     
@@ -217,27 +215,36 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
         const userId = req.user.id;
         const { currency, amount, phone, beneficiaryName, method } = req.body;
         
-        console.log('💸 Processing withdrawal for user:', userId);
-        console.log('📋 Withdrawal details:', { amount, phone, beneficiaryName, method });
+        console.log('🔍 [WITHDRAW DEBUG] Step 1: Request received');
+        console.log('📋 User ID:', userId);
+        console.log('📋 Request body:', JSON.stringify({ currency, amount, phone, beneficiaryName, method }, null, 2));
         
+        // Validate inputs
         if (!currency || !amount || !phone || !beneficiaryName) {
+            console.log('❌ [WITHDRAW DEBUG] Step 2: Validation FAILED - Missing fields');
             return res.status(400).json({
                 status: 'error',
-                message: 'Missing required fields: currency, amount, phone, beneficiaryName'
+                message: 'Missing required fields: currency, amount, phone, beneficiaryName',
+                debug: { currency, amount, phone, beneficiaryName }
             });
         }
+        console.log('✅ [WITHDRAW DEBUG] Step 2: Validation PASSED');
 
         const withdrawAmount = parseFloat(amount);
+        console.log('💰 [WITHDRAW DEBUG] Step 3: Parsed amount:', withdrawAmount);
         
         await client.query('BEGIN');
+        console.log('✅ [WITHDRAW DEBUG] Step 4: Transaction BEGIN');
         
         // Check balance
+        console.log('🔍 [WITHDRAW DEBUG] Step 5: Checking wallet balance...');
         const wallet = await client.query(
             'SELECT balance FROM wallets WHERE user_id = $1 AND currency = $2',
             [userId, currency]
         );
         
         if (wallet.rows.length === 0) {
+            console.log('❌ [WITHDRAW DEBUG] Step 5: Wallet NOT FOUND');
             await client.query('ROLLBACK');
             return res.status(400).json({
                 status: 'error',
@@ -249,21 +256,40 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
         const fee = withdrawAmount * 0.02;
         const totalRequired = withdrawAmount + fee;
         
+        console.log('✅ [WITHDRAW DEBUG] Step 5: Wallet found');
+        console.log('💵 Current balance:', currentBalance);
+        console.log('💸 Fee (2%):', fee);
+        console.log('💰 Total required:', totalRequired);
+        
         if (currentBalance < totalRequired) {
+            console.log('❌ [WITHDRAW DEBUG] Step 6: INSUFFICIENT BALANCE');
             await client.query('ROLLBACK');
             return res.status(400).json({
                 status: 'error',
                 message: `Insufficient balance. Required: ${totalRequired.toFixed(2)} ${currency}, Available: ${currentBalance.toFixed(2)} ${currency}`
             });
         }
+        console.log('✅ [WITHDRAW DEBUG] Step 6: Balance check PASSED');
         
         // Deduct from wallet
+        console.log('🔍 [WITHDRAW DEBUG] Step 7: Deducting from wallet...');
         await client.query(
             'UPDATE wallets SET balance = balance - $1, updated_at = NOW() WHERE user_id = $2 AND currency = $3',
             [totalRequired, userId, currency]
         );
+        console.log('✅ [WITHDRAW DEBUG] Step 7: Wallet deducted successfully');
         
         // Process payout via Flutterwave
+        console.log('🔍 [WITHDRAW DEBUG] Step 8: Calling Flutterwave API...');
+        console.log('📤 Flutterwave payload:', JSON.stringify({
+            amount: withdrawAmount,
+            phone,
+            beneficiaryName,
+            method: method || 'MPESA',
+            userId,
+            currency
+        }, null, 2));
+        
         const flutterwaveService = require('../services/flutterwave.service');
         const payoutResult = await flutterwaveService.processKenyaPayout({
             amount: withdrawAmount,
@@ -274,7 +300,12 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
             currency
         });
 
+        console.log('📥 [WITHDRAW DEBUG] Step 8: Flutterwave response received');
+        console.log('📦 Response:', JSON.stringify(payoutResult, null, 2));
+
         if (payoutResult.success) {
+            console.log('✅ [WITHDRAW DEBUG] Step 9: Payout SUCCESS');
+            
             // Record transaction
             const transactionId = 'WTH' + Date.now();
             await client.query(
@@ -291,8 +322,9 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
             );
             
             await client.query('COMMIT');
+            console.log('✅ [WITHDRAW DEBUG] Step 10: Transaction COMMITTED');
             
-            res.json({
+            return res.json({
                 status: 'success',
                 message: `Withdrawal sent to ${beneficiaryName}`,
                 data: {
@@ -306,24 +338,42 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
                 }
             });
         } else {
+            console.log('❌ [WITHDRAW DEBUG] Step 9: Payout FAILED');
+            console.log('❌ Error from Flutterwave:', payoutResult.error);
+            
             // Refund if payout failed
             await client.query('ROLLBACK');
+            console.log('✅ [WITHDRAW DEBUG] Step 10: Transaction ROLLED BACK');
             
-            res.status(500).json({
+            return res.status(500).json({
                 status: 'error',
-                message: payoutResult.error || 'Withdrawal failed'
+                message: payoutResult.error || 'Withdrawal failed',
+                debug: {
+                    flutterwaveError: payoutResult.error,
+                    shouldRefund: payoutResult.shouldRefund
+                }
             });
         }
         
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('❌ Withdrawal error:', error);
+        console.error('❌ [WITHDRAW DEBUG] EXCEPTION CAUGHT');
+        console.error('❌ Error name:', error.name);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        
         res.status(500).json({
             status: 'error',
-            message: 'Withdrawal failed. Please try again.'
+            message: 'Withdrawal failed. Please try again.',
+            debug: {
+                errorName: error.name,
+                errorMessage: error.message,
+                errorStack: error.stack
+            }
         });
     } finally {
         client.release();
+        console.log('✅ [WITHDRAW DEBUG] Database client released');
     }
 });
 
