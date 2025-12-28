@@ -13,7 +13,8 @@ async function updateRatesInDatabase() {
     try {
         console.log('💱 Fetching live exchange rates from Flutterwave...');
         
-        const ratesResult = await flutterwaveService.getExchangeRates();
+        const exchangeRatesService = require('../services/exchangerates.service'); // Add at top
+        const ratesResult = await exchangeRatesService.getLiveRates();
         
         if (ratesResult.success && ratesResult.data) {
             const { ngnToKsh, kshToNgn } = ratesResult.data;
