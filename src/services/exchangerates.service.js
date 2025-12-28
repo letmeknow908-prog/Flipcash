@@ -3,7 +3,7 @@ const axios = require('axios');
 class ExchangeRatesService {
     constructor() {
         this.apiKey = '3dad52876ca5008378b1b0d6';
-        this.baseURL = 'https://api.exchangeratesapi.io/v1';
+        this.baseURL = 'https://open.er-api.com/v6/latest';
         this.markup = 0.02; // 2% markup on rates
     }
 
