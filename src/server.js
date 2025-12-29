@@ -31,7 +31,8 @@ const routes = [
     { name: '/api/v1/transactions', path: './routes/transaction.routes' },
     { name: '/api/v1/webhooks', path: './routes/webhook.routes' },
     { name: '/api/v1/admin-auth', path: './routes/admin.auth.routes' },
-    { name: '/api/v1/admin', path: './routes/admin.routes' }
+    { name: '/api/v1/admin', path: './routes/admin.routes' },
+    { name: '/api/v1/notifications', path: './routes/notification.routes' }
 ];
 
 routes.forEach(route => {
