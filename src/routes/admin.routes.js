@@ -253,6 +253,132 @@ router.post('/rates/manual', async (req, res) => {
     }
 });
 
+// =========================
+// USER WALLET & TRANSACTIONS
+// =========================
+router.get('/users/:userId/wallets', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const result = await db.query(
+            'SELECT currency, balance FROM wallets WHERE user_id = $1',
+            [userId]
+        );
+        
+        res.json({
+            status: 'success',
+            data: result.rows
+        });
+    } catch (error) {
+        console.error('Get user wallets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get user wallets'
+        });
+    }
+});
+
+router.get('/users/:userId/transactions', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const result = await db.query(
+            `SELECT * FROM transactions 
+             WHERE user_id = $1 
+             ORDER BY created_at DESC 
+             LIMIT 20`,
+            [userId]
+        );
+        
+        res.json({
+            status: 'success',
+            data: result.rows
+        });
+    } catch (error) {
+        console.error('Get user transactions error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get user transactions'
+        });
+    }
+});
+
+// =========================
+// PLATFORM SETTINGS
+// =========================
+router.get('/settings', async (req, res) => {
+    try {
+        const result = await db.query('SELECT * FROM platform_settings LIMIT 1');
+        
+        if (result.rows.length > 0) {
+            res.json({
+                status: 'success',
+                data: result.rows[0]
+            });
+        } else {
+            // Return defaults if no settings exist
+            res.json({
+                status: 'success',
+                data: {
+                    transactionFee: 1,
+                    withdrawalFee: 2,
+                    minDeposit: 1000,
+                    minWithdrawal: 100
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Get settings error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get settings'
+        });
+    }
+});
+
+router.post('/settings', async (req, res) => {
+    try {
+        const { transactionFee, withdrawalFee, minDeposit, minWithdrawal } = req.body;
+        
+        // Check if settings exist
+        const existing = await db.query('SELECT id FROM platform_settings LIMIT 1');
+        
+        if (existing.rows.length > 0) {
+            // Update existing
+            await db.query(
+                `UPDATE platform_settings 
+                 SET transaction_fee = $1, 
+                     withdrawal_fee = $2, 
+                     min_deposit = $3, 
+                     min_withdrawal = $4,
+                     updated_at = NOW()
+                 WHERE id = $5`,
+                [transactionFee, withdrawalFee, minDeposit, minWithdrawal, existing.rows[0].id]
+            );
+        } else {
+            // Insert new
+            await db.query(
+                `INSERT INTO platform_settings (transaction_fee, withdrawal_fee, min_deposit, min_withdrawal)
+                 VALUES ($1, $2, $3, $4)`,
+                [transactionFee, withdrawalFee, minDeposit, minWithdrawal]
+            );
+        }
+        
+        console.log(`✅ Settings updated: Fee=${transactionFee}%, Withdrawal=${withdrawalFee}%, MinDeposit=₦${minDeposit}, MinWithdrawal=KSh${minWithdrawal}`);
+        
+        res.json({
+            status: 'success',
+            message: 'Settings updated successfully'
+        });
+    } catch (error) {
+        console.error('Update settings error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to update settings'
+        });
+    }
+});
+
 console.log('✅ Admin routes loaded successfully with secure middleware');
 
 module.exports = router;
