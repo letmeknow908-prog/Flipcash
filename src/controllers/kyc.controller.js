@@ -90,6 +90,10 @@ const submitKYC = async (req, res) => {
 
         console.log(`✅ KYC submission completed for user ${userId}`);
 
+        // ✅ ADD: Notify user
+        const notificationService = require('../services/notification.service');
+        await notificationService.notifyKYCSubmitted(userId);
+
         res.status(200).json({
             status: 'success',
             message: 'KYC submitted successfully. Your application is under review.'
