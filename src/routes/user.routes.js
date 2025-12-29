@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth.middleware');
-const kycController = require('../controllers/kyc.controller');
 const db = require('../../config/db');
 const bcrypt = require('bcryptjs');
     
@@ -134,9 +133,85 @@ router.put('/me', authMiddleware, async (req, res) => {
     }
 });
 
-// KYC routes
-router.post('/kyc/submit', authMiddleware, kycController.submitKYC);
-router.get('/kyc/status', authMiddleware, kycController.getKYCStatus);
+// ✅ KYC ROUTES WITH NOTIFICATIONS
+router.post('/kyc/submit', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { fullname, dob, address, idType, idNumber, bvn, country, occupation, sourceFunds } = req.body;
+        
+        // Validation
+        if (!fullname || !dob || !address || !idType || !idNumber || !bvn || !country || !occupation || !sourceFunds) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'All fields are required'
+            });
+        }
+        
+        // Check if KYC already exists
+        const existingKyc = await db.query('SELECT id FROM kyc_data WHERE user_id = $1', [userId]);
+        
+        if (existingKyc.rows.length > 0) {
+            // Update existing KYC
+            await db.query(
+                `UPDATE kyc_data 
+                 SET fullname = $1, dob = $2, address = $3, id_type = $4, id_number = $5, bvn = $6, 
+                     country = $7, occupation = $8, source_funds = $9, updated_at = NOW()
+                 WHERE user_id = $10`,
+                [fullname, dob, address, idType, idNumber, bvn, country, occupation, sourceFunds, userId]
+            );
+        } else {
+            // Insert new KYC
+            await db.query(
+                `INSERT INTO kyc_data (user_id, fullname, dob, address, id_type, id_number, bvn, country, occupation, source_funds)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                [userId, fullname, dob, address, idType, idNumber, bvn, country, occupation, sourceFunds]
+            );
+        }
+        
+        // Update user status to pending
+        await db.query(
+            `UPDATE users SET kyc_status = 'pending', kyc_submitted_at = NOW() WHERE id = $1`,
+            [userId]
+        );
+        
+        // ✅ Notify user
+        const notificationService = require('../services/notification.service');
+        await notificationService.notifyKYCSubmitted(userId);
+        
+        res.json({
+            status: 'success',
+            message: 'KYC submitted successfully'
+        });
+    } catch (error) {
+        console.error('KYC submission error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to submit KYC'
+        });
+    }
+});
+
+router.get('/kyc/status', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        
+        const result = await db.query(
+            'SELECT kyc_status, kyc_submitted_at, kyc_verified_at FROM users WHERE id = $1',
+            [userId]
+        );
+        
+        res.json({
+            status: 'success',
+            data: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Get KYC status error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get KYC status'
+        });
+    }
+});
 
 // Get user wallets
 router.get('/wallets', authMiddleware, async (req, res) => {
