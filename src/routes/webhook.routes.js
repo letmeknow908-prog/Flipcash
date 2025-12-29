@@ -109,6 +109,10 @@ async function handleChargeCompleted(data) {
         ]);
 
         console.log(`✅ Deposit processed: ${data.amount} NGN credited to user ${userId}`);
+        
+        // ✅ ADD: Notify user
+        const notificationService = require('../services/notification.service');
+        await notificationService.notifyDeposit(userId, data.amount, 'NGN');
 
     } catch (error) {
         console.error('❌ Error processing deposit:', error);
@@ -139,6 +143,15 @@ async function handleTransferCompleted(data) {
         );
 
         console.log('✅ Withdrawal status updated:', data.reference);
+        
+        // ✅ ADD: Notify user if completed
+        if (data.status === 'SUCCESSFUL') {
+            const txResult = await db.query('SELECT user_id, amount, currency FROM transactions WHERE reference = $1', [data.reference]);
+            if (txResult.rows.length > 0) {
+                const notificationService = require('../services/notification.service');
+                await notificationService.notifyWithdrawalCompleted(txResult.rows[0].user_id, txResult.rows[0].amount, txResult.rows[0].currency);
+            }
+        }
     } catch (error) {
         console.error('❌ Error processing withdrawal:', error);
     }
