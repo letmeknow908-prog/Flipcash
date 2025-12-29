@@ -180,6 +180,10 @@ await client.query(
         
         console.log('✅ Swap completed successfully');
         
+        // ✅ ADD: Notify user
+        const notificationService = require('../services/notification.service');
+        await notificationService.notifySwap(userId, fromCurrency, toCurrency, swapAmount, finalAmount);
+        
         res.json({
             status: 'success',
             message: 'Currency swap completed successfully',
@@ -232,6 +236,15 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
 
         const withdrawAmount = parseFloat(amount);
         console.log('💰 [WITHDRAW DEBUG] Step 3: Parsed amount:', withdrawAmount);
+        
+        // ✅ ADD: 30 KSH minimum validation
+        if (currency === 'KSH' && withdrawAmount < 30) {
+            console.log('❌ [WITHDRAW DEBUG] Step 3: Amount below 30 KSH minimum');
+            return res.status(400).json({
+                status: 'error',
+                message: 'Minimum withdrawal amount is 30 KSH (Flutterwave requirement)'
+            });
+        }
         
         await client.query('BEGIN');
         console.log('✅ [WITHDRAW DEBUG] Step 4: Transaction BEGIN');
@@ -323,6 +336,10 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
             
             await client.query('COMMIT');
             console.log('✅ [WITHDRAW DEBUG] Step 10: Transaction COMMITTED');
+            
+            // ✅ ADD: Notify user
+            const notificationService = require('../services/notification.service');
+            await notificationService.notifyWithdrawal(userId, withdrawAmount, currency, beneficiaryName);
             
             return res.json({
                 status: 'success',
