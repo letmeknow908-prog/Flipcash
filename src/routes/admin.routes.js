@@ -134,4 +134,125 @@ router.get('/transactions', adminController.getAllTransactions);
 
 console.log('✅ Admin routes loaded successfully with secure middleware');
 
+// =========================
+// REVENUE BREAKDOWN
+// =========================
+router.get('/revenue', async (req, res) => {
+    try {
+        const { period = 'month' } = req.query;
+        
+        let dateFilter = '';
+        if (period === 'today') {
+            dateFilter = "AND DATE(created_at) = CURRENT_DATE";
+        } else if (period === 'week') {
+            dateFilter = "AND created_at >= NOW() - INTERVAL '7 days'";
+        } else if (period === 'month') {
+            dateFilter = "AND created_at >= NOW() - INTERVAL '30 days'";
+        }
+        
+        // Get swap revenue (1% fee)
+        const swapResult = await db.query(`
+            SELECT COUNT(*) as count, COALESCE(SUM(amount * 0.01), 0) as revenue, COALESCE(SUM(amount), 0) as volume
+            FROM transactions 
+            WHERE type = 'swap' AND status = 'completed' ${dateFilter}
+        `);
+        
+        // Get withdrawal revenue (2% fee)
+        const withdrawalResult = await db.query(`
+            SELECT COUNT(*) as count, COALESCE(SUM(amount * 0.02), 0) as revenue, COALESCE(SUM(amount), 0) as volume
+            FROM transactions 
+            WHERE type IN ('withdraw', 'withdrawal') AND status = 'completed' ${dateFilter}
+        `);
+        
+        // Get deposit count
+        const depositResult = await db.query(`
+            SELECT COUNT(*) as count
+            FROM transactions 
+            WHERE type = 'deposit' AND status = 'completed' ${dateFilter}
+        `);
+        
+        const swapRevenue = parseFloat(swapResult.rows[0].revenue);
+        const withdrawalRevenue = parseFloat(withdrawalResult.rows[0].revenue);
+        
+        res.json({
+            status: 'success',
+            data: {
+                swapRevenue,
+                swapCount: parseInt(swapResult.rows[0].count),
+                withdrawalRevenue,
+                withdrawalCount: parseInt(withdrawalResult.rows[0].count),
+                depositCount: parseInt(depositResult.rows[0].count),
+                totalRevenue: swapRevenue + withdrawalRevenue,
+                totalVolume: parseFloat(swapResult.rows[0].volume) + parseFloat(withdrawalResult.rows[0].volume),
+                period
+            }
+        });
+    } catch (error) {
+        console.error('Revenue breakdown error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to load revenue data'
+        });
+    }
+});
+
+router.post('/rates/manual', async (req, res) => {
+    try {
+        const { ngnToKsh, kshToNgn, enabled } = req.body;
+        
+        if (enabled === false) {
+            // Disable manual mode - delete manual rate records
+            await db.query(`
+                DELETE FROM exchange_rates 
+                WHERE manual_override = true
+            `);
+            
+            console.log('✅ Manual rate mode disabled by admin');
+            
+            return res.json({
+                status: 'success',
+                message: 'Manual mode disabled, API rates restored'
+            });
+        }
+        
+        // Enable manual mode
+        if (!ngnToKsh || !kshToNgn) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Both rates are required'
+            });
+        }
+        
+        // Delete any existing manual rates
+        await db.query(`
+            DELETE FROM exchange_rates 
+            WHERE manual_override = true
+        `);
+        
+        // Insert new manual rates
+        await db.query(`
+            INSERT INTO exchange_rates (from_currency, to_currency, rate, manual_override, created_at)
+            VALUES 
+                ('NGN', 'KSH', $1, true, NOW()),
+                ('KSH', 'NGN', $2, true, NOW())
+        `, [ngnToKsh, kshToNgn]);
+        
+        console.log(`✅ Manual rates set by admin: NGN→KSH=${ngnToKsh}, KSH→NGN=${kshToNgn}`);
+        
+        res.json({
+            status: 'success',
+            message: 'Manual rates saved successfully',
+            data: { ngnToKsh, kshToNgn }
+        });
+    } catch (error) {
+        console.error('Manual rate error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to save manual rates'
+        });
+    }
+});
+
+console.log('✅ Admin routes loaded successfully with secure middleware');
+
 module.exports = router;
