@@ -13,25 +13,36 @@ async function updateRatesInDatabase() {
     try {
         console.log('💱 Fetching live exchange rates from Flutterwave...');
         
-        const exchangeRatesService = require('../services/exchangerates.service'); // Add at top
+        const exchangeRatesService = require('../services/exchangerates.service');
         const ratesResult = await exchangeRatesService.getLiveRates();
         
         if (ratesResult.success && ratesResult.data) {
             const { ngnToKsh, kshToNgn } = ratesResult.data;
             
-            // ✅ DELETE old rates first, then INSERT new ones
-            await db.query(`DELETE FROM exchange_rates WHERE from_currency = 'NGN' AND to_currency = 'KSH'`);
-            await db.query(`DELETE FROM exchange_rates WHERE from_currency = 'KSH' AND to_currency = 'NGN'`);
-            
-            // Insert fresh rates
+            // ✅ DELETE only NON-MANUAL rates, then INSERT new API rates
             await db.query(`
-                INSERT INTO exchange_rates (from_currency, to_currency, rate, source, created_at)
-                VALUES ('NGN', 'KSH', $1, 'Flutterwave', NOW())
+                DELETE FROM exchange_rates 
+                WHERE from_currency = 'NGN' 
+                AND to_currency = 'KSH' 
+                AND (manual_override = false OR manual_override IS NULL)
+            `);
+            
+            await db.query(`
+                DELETE FROM exchange_rates 
+                WHERE from_currency = 'KSH' 
+                AND to_currency = 'NGN' 
+                AND (manual_override = false OR manual_override IS NULL)
+            `);
+            
+            // Insert fresh API rates
+            await db.query(`
+                INSERT INTO exchange_rates (from_currency, to_currency, rate, source, manual_override, created_at)
+                VALUES ('NGN', 'KSH', $1, 'Flutterwave', false, NOW())
             `, [ngnToKsh]);
             
             await db.query(`
-                INSERT INTO exchange_rates (from_currency, to_currency, rate, source, created_at)
-                VALUES ('KSH', 'NGN', $1, 'Flutterwave', NOW())
+                INSERT INTO exchange_rates (from_currency, to_currency, rate, source, manual_override, created_at)
+                VALUES ('KSH', 'NGN', $1, 'Flutterwave', false, NOW())
             `, [kshToNgn]);
             
             console.log('✅ Live rates fetched and saved to DB:', { ngnToKsh, kshToNgn });
@@ -47,7 +58,6 @@ async function updateRatesInDatabase() {
     }
 }
 
-// ✅ Start auto-update when server starts
 // ✅ Start auto-update when server starts
 (async function initializeRates() {
     console.log('🚀 Initializing rate auto-update service...');
@@ -65,67 +75,113 @@ async function updateRatesInDatabase() {
     console.log('✅ Rate auto-update service started (every 5 minutes)');
 })();
 
-// GET /api/v1/rates - Get latest exchange rates
+// GET /api/v1/rates - Get latest exchange rates (prioritize manual rates)
 router.get('/', async (req, res) => {
     try {
-        // Try to get latest rates from database first
-        const dbRates = await db.query(`
-            SELECT from_currency, to_currency, rate, created_at
+        // ✅ STEP 1: Check for manual override rates FIRST
+        const manualRates = await db.query(`
+            SELECT from_currency, to_currency, rate, created_at as updated_at
             FROM exchange_rates 
-            WHERE from_currency IN ('NGN', 'KSH')
+            WHERE manual_override = true 
             ORDER BY created_at DESC 
             LIMIT 2
         `);
         
-        if (dbRates.rows.length === 2) {
-            // Found rates in database
-            const ngnToKsh = dbRates.rows.find(r => r.from_currency === 'NGN')?.rate || 11.53325175;
-            const kshToNgn = dbRates.rows.find(r => r.from_currency === 'KSH')?.rate || 0.09021803;
-            const lastUpdated = dbRates.rows[0].created_at;
+        if (manualRates.rows.length === 2) {
+            // Manual rates exist - use them
+            console.log('📌 Using MANUAL exchange rates (admin override)');
             
-            return res.status(200).json({
+            const rates = {};
+            manualRates.rows.forEach(row => {
+                if (row.from_currency === 'NGN' && row.to_currency === 'KSH') {
+                    rates.ngnToKsh = parseFloat(row.rate);
+                } else if (row.from_currency === 'KSH' && row.to_currency === 'NGN') {
+                    rates.kshToNgn = parseFloat(row.rate);
+                }
+            });
+            
+            return res.json({
                 status: 'success',
                 data: {
-                    ngnToKsh: parseFloat(ngnToKsh),
-                    kshToNgn: parseFloat(kshToNgn),
-                    lastUpdated,
-                    source: 'database'
+                    ngnToKsh: rates.ngnToKsh || 0.0906,
+                    kshToNgn: rates.kshToNgn || 11.0275,
+                    updated_at: manualRates.rows[0].updated_at,
+                    manual_override: true,
+                    source: 'manual'
                 }
             });
         }
         
-        // Fallback: Fetch fresh rates
+        // ✅ STEP 2: No manual rates - use API rates from database
+        const apiRates = await db.query(`
+            SELECT from_currency, to_currency, rate, created_at as updated_at
+            FROM exchange_rates 
+            WHERE (manual_override = false OR manual_override IS NULL)
+            ORDER BY created_at DESC 
+            LIMIT 2
+        `);
+        
+        if (apiRates.rows.length >= 2) {
+            console.log('📊 Using API exchange rates from database');
+            
+            const rates = {};
+            apiRates.rows.forEach(row => {
+                if (row.from_currency === 'NGN' && row.to_currency === 'KSH') {
+                    rates.ngnToKsh = parseFloat(row.rate);
+                } else if (row.from_currency === 'KSH' && row.to_currency === 'NGN') {
+                    rates.kshToNgn = parseFloat(row.rate);
+                }
+            });
+            
+            return res.json({
+                status: 'success',
+                data: {
+                    ngnToKsh: rates.ngnToKsh || 0.0906,
+                    kshToNgn: rates.kshToNgn || 11.0275,
+                    updated_at: apiRates.rows[0].updated_at,
+                    manual_override: false,
+                    source: 'api_database'
+                }
+            });
+        }
+        
+        // ✅ STEP 3: Fallback - fetch fresh rates from API
+        console.log('⚠️ No rates in database, fetching fresh rates...');
         const ratesResult = await flutterwaveService.getExchangeRates();
         
         if (ratesResult.success) {
-            res.status(200).json({
+            return res.json({
                 status: 'success',
                 data: {
                     ...ratesResult.data,
-                    source: 'live'
-                }
-            });
-        } else {
-            // Ultimate fallback
-            res.status(200).json({
-                status: 'success',
-                data: {
-                    ngnToKsh: 11.53325175,
-                    kshToNgn: 0.09021803,
-                    lastUpdated: new Date().toISOString(),
-                    source: 'fallback'
+                    manual_override: false,
+                    source: 'live_api'
                 }
             });
         }
-    } catch (error) {
-        console.error('Get rates error:', error);
-        res.status(200).json({
+        
+        // ✅ STEP 4: Ultimate fallback
+        console.log('⚠️ Using hardcoded fallback rates');
+        res.json({
             status: 'success',
             data: {
-                ngnToKsh: 11.53325175,
-                kshToNgn: 0.09021803,
-                lastUpdated: new Date().toISOString(),
+                ngnToKsh: 0.0906,
+                kshToNgn: 11.0275,
+                updated_at: new Date().toISOString(),
+                manual_override: false,
                 source: 'fallback'
+            }
+        });
+    } catch (error) {
+        console.error('Get rates error:', error);
+        res.json({
+            status: 'success',
+            data: {
+                ngnToKsh: 0.0906,
+                kshToNgn: 11.0275,
+                updated_at: new Date().toISOString(),
+                manual_override: false,
+                source: 'error_fallback'
             }
         });
     }
