@@ -55,24 +55,27 @@ const submitKYC = async (req, res) => {
                      id_type = $5, 
                      id_number = $6, 
                      bvn = $7,
+                     country = $8,
+                     occupation = $9,
+                     source_funds = $10,
                      kyc_submitted_at = CURRENT_TIMESTAMP,
                      kyc_approved_at = NULL,
                      kyc_rejection_reason = NULL,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE user_id = $1`,
-                [userId, fullname, dob, address, idType, idNumber, bvn]
+                [userId, fullname, dob, address, idType, idNumber, bvn, country, occupation, sourceFunds]
             );
             
             console.log(`✅ KYC updated for user ${userId}`);
-        } else {
+         } else {
             // INSERT new KYC submission
             console.log(`💾 Creating new KYC for user ${userId}`);
             
             await db.query(
                 `INSERT INTO kyc_data 
-                 (user_id, fullname, dob, address, id_type, id_number, bvn, kyc_submitted_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)`,
-                [userId, fullname, dob, address, idType, idNumber, bvn]
+                 (user_id, fullname, dob, address, id_type, id_number, bvn, country, occupation, source_funds, kyc_submitted_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)`,
+                [userId, fullname, dob, address, idType, idNumber, bvn, country, occupation, sourceFunds]
             );
             
             console.log(`✅ KYC created for user ${userId}`);
