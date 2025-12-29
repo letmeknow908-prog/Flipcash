@@ -134,7 +134,10 @@ router.put('/me', authMiddleware, async (req, res) => {
 });
 
 // ✅ KYC ROUTES WITH NOTIFICATIONS
-router.post('/kyc/submit', authMiddleware, async (req, res) => {
+// KYC routes - use controller
+const kycController = require('../controllers/kyc.controller');
+router.post('/kyc/submit', authMiddleware, kycController.submitKYC);
+router.get('/kyc/status', authMiddleware, kycController.getKYCStatus);
     try {
         const userId = req.user.id;
         const { fullname, dob, address, idType, idNumber, bvn, country, occupation, sourceFunds } = req.body;
