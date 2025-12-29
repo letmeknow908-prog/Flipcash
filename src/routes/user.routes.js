@@ -115,6 +115,16 @@ router.put('/me', authMiddleware, async (req, res) => {
             [phone, userId]
         );
         
+        // ✅ ADD: Notify user
+        const notificationService = require('../services/notification.service');
+        await notificationService.createNotification(
+            userId,
+            'profile',
+            '✏️ Profile Updated',
+            `Your phone number was updated to ${phone}`,
+            { phone }
+        );
+        
         // Get updated user
         const result = await db.query(
             'SELECT id, first_name, last_name, email, phone, kyc_status, kyc_verified, created_at FROM users WHERE id = $1',
