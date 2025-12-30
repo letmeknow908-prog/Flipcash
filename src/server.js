@@ -37,16 +37,23 @@ const routes = [
 
 routes.forEach(route => {
     try {
-        console.log(`🔍 Attempting to load: ${route.path}`);
-        const router = require(route.path);
-        app.use(route.name, router);
-        console.log(`✅ Loaded route: ${route.name}`);
-    } catch (error) {
-        console.log(`❌ FAILED to load ${route.path}:`);
-        console.log(`   Error: ${error.message}`);
-        console.log(`   Stack: ${error.stack}`);
+       console.log(`🔍 Attempting to load: ${route.path}`);
+       const router = require(route.path);
+       app.use(route.name, router);
+       console.log(`✅ Loaded route: ${route.name}`);
+       } catch (error) {
+       console.log(`❌ FAILED to load ${route.path}:`);
+       console.log(`   Error: ${error.message}`);
+       console.log(`   Stack: ${error.stack}`);
     }
 });
+
+// Broadcast routes
+const broadcastRoutes = require('./routes/broadcast.routes');
+const adminBroadcastRoutes = require('./routes/admin.broadcast.routes');
+
+app.use('/api/v1/broadcasts', broadcastRoutes);
+app.use('/api/v1/admin/broadcasts', adminBroadcastRoutes);
 
 // System routes (IP detection)
 try {
