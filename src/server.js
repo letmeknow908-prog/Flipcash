@@ -55,6 +55,10 @@ const adminBroadcastRoutes = require('./routes/admin.broadcast.routes');
 app.use('/api/v1/broadcasts', broadcastRoutes);
 app.use('/api/v1/admin/broadcasts', adminBroadcastRoutes);
 
+// Refund routes
+const adminRefundRoutes = require('./routes/admin.refund.routes');
+app.use('/api/v1/admin/refund', adminRefundRoutes);
+
 // System routes (IP detection)
 try {
     const systemRoutes = require('./routes/system.routes');
