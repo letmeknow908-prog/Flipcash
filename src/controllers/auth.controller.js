@@ -152,6 +152,18 @@ exports.login = async (req, res) => {
             });
         }
 
+        // ✅ Check if password change is required (AFTER password validation)
+        if (user.force_password_change) {
+            console.log(`⚠️ User ${user.id} must change temporary password`);
+            return res.status(403).json({
+                status: 'error',
+                code: 'PASSWORD_CHANGE_REQUIRED',
+                message: 'You must change your temporary password before continuing',
+                requirePasswordChange: true,
+                userId: user.id
+            });
+        }
+
         // Generate JWT token
         const accessToken = jwt.sign(
             { 
