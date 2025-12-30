@@ -1,72 +1,84 @@
 /**
  * FlipCash Dynamic Fee Calculator
- * Ensures profitability on ALL transaction amounts (₦200 - ₦1,000,000+)
+ * USER-FRIENDLY VERSION - Service fee hidden in rate
  */
 
-const FLUTTERWAVE_COST_NGN = 1194.44; // KSh 107.5 converted at 0.09 rate
+const FLUTTERWAVE_COST_NGN = 1194.44;
 
 /**
- * Calculate fees based on transaction amount
- * Returns all fee details including profitability
+ * Calculate fees - Service fee hidden in exchange rate
  */
 function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
-    let serviceFee, swapFeePercent, withdrawalFeePercent, tier;
+    let swapFeePercent, withdrawalFeePercent, tier, rateMarkupPercent;
     
-    // Tiered fee structure based on amount
-    if (amountNGN < 5000) {
-    // Tier 1: Micro (₦200 - ₦5,000)
-    tier = 'Micro';
-    serviceFee = 1000;  // ✅ REDUCED from ₦1,500
-    swapFeePercent = 0;
-    withdrawalFeePercent = 5;
-    } else if (amountNGN < 20000) {
-        // Tier 2: Small (₦5,001 - ₦20,000)
-        tier = 'Small';
-        serviceFee = 800;
-        swapFeePercent = 2;
-        withdrawalFeePercent = 3;
-    } else if (amountNGN < 50000) {
-        // Tier 3: Medium (₦20,001 - ₦50,000)
-        tier = 'Medium';
-        serviceFee = 500;
-        swapFeePercent = 1.5;
-        withdrawalFeePercent = 2.5;
-    } else if (amountNGN < 100000) {
-        // Tier 4: Large (₦50,001 - ₦100,000)
-        tier = 'Large';
-        serviceFee = 300;
-        swapFeePercent = 1;
-        withdrawalFeePercent = 2;
-    } else {
-        // Tier 5: Very Large (₦100,001+)
-        tier = 'Very Large';
-        serviceFee = 200;
-        swapFeePercent = 0.8;
-        withdrawalFeePercent = 1.8;
+    // ✅ MINIMUM TRANSACTION: ₦2,000
+    if (amountNGN < 2000) {
+        throw new Error('Minimum transaction amount is ₦2,000');
     }
     
-    // Calculate swap fee
+    // ✅ USER-FRIENDLY TIERS (no visible service fee)
+    if (amountNGN < 5000) {
+        // Starter: ₦2,000 - ₦4,999
+        tier = 'Starter';
+        rateMarkupPercent = 3.5;  // Hidden in rate
+        swapFeePercent = 0;
+        withdrawalFeePercent = 6;
+    } else if (amountNGN < 20000) {
+        // Basic: ₦5,000 - ₦19,999
+        tier = 'Basic';
+        rateMarkupPercent = 2.5;
+        swapFeePercent = 0;
+        withdrawalFeePercent = 4.5;
+    } else if (amountNGN < 50000) {
+        // Standard: ₦20,000 - ₦49,999
+        tier = 'Standard';
+        rateMarkupPercent = 1.5;
+        swapFeePercent = 0;
+        withdrawalFeePercent = 3.5;
+    } else if (amountNGN < 100000) {
+        // Premium: ₦50,000 - ₦99,999
+        tier = 'Premium';
+        rateMarkupPercent = 1;
+        swapFeePercent = 0;
+        withdrawalFeePercent = 2.8;
+    } else {
+        // VIP: ₦100,000+
+        tier = 'VIP';
+        rateMarkupPercent = 0.8;
+        swapFeePercent = 0;
+        withdrawalFeePercent = 2;
+    }
+    
+    // Base exchange rate (from API)
+    const BASE_RATE = 0.0908;
+    
+    // Apply hidden markup to rate
+    const adjustedRate = BASE_RATE * (1 - rateMarkupPercent / 100);
+    
+    // Calculate swap (no visible swap fee)
     const swapFee = (amountNGN * swapFeePercent) / 100;
     const netAmount = amountNGN - swapFee;
     
-    // Exchange rate (your platform rate)
-    const YOUR_RATE = 0.0908;
+    // Convert to KSH using ADJUSTED rate
+    const amountKSH = netAmount * adjustedRate;
     
-    // Convert to KSH
-    const amountKSH = netAmount * YOUR_RATE;
-    
-    // Calculate withdrawal fee in KSH
+    // Calculate withdrawal fee
     const withdrawalFeeKSH = (amountKSH * withdrawalFeePercent) / 100;
     
-    // Convert withdrawal fee back to NGN for revenue calculation
+    // Convert withdrawal fee to NGN for revenue calculation
     const FLUTTERWAVE_RATE = 0.09;
     const withdrawalFeeNGN = withdrawalFeeKSH / FLUTTERWAVE_RATE;
+    
+    // Calculate hidden service fee (from rate markup)
+    const baseAmountKSH = netAmount * BASE_RATE;
+    const hiddenServiceFeeKSH = baseAmountKSH - amountKSH;
+    const hiddenServiceFeeNGN = hiddenServiceFeeKSH / FLUTTERWAVE_RATE;
     
     // Final amount user receives
     const finalAmountKSH = amountKSH - withdrawalFeeKSH;
     
     // Total revenue
-    const totalRevenue = serviceFee + swapFee + withdrawalFeeNGN;
+    const totalRevenue = hiddenServiceFeeNGN + swapFee + withdrawalFeeNGN;
     
     // Profit calculation
     const profit = totalRevenue - FLUTTERWAVE_COST_NGN;
@@ -77,12 +89,18 @@ function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
         tier,
         
         // Fee breakdown
-        serviceFee,
+        serviceFee: 0, // Hidden
+        hiddenServiceFeeNGN, // For internal tracking
         swapFee,
         swapFeePercent,
         withdrawalFeeKSH,
         withdrawalFeeNGN,
         withdrawalFeePercent,
+        rateMarkupPercent,
+        
+        // Rates
+        baseRate: BASE_RATE,
+        adjustedRate,
         
         // Amounts
         originalAmount: amountNGN,
@@ -97,8 +115,9 @@ function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
         profitMargin: profitMargin.toFixed(2) + '%',
         profitable: profit > 0,
         
-        // Total fee percentage
-        totalFeePercent: ((serviceFee + swapFee + withdrawalFeeNGN) / amountNGN * 100).toFixed(2) + '%'
+        // What user sees
+        userVisibleFeePercent: withdrawalFeePercent,
+        userVisibleFeeKSH: withdrawalFeeKSH
     };
 }
 
@@ -106,30 +125,71 @@ function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
  * Get tier name for display
  */
 function getTierName(amount) {
-    if (amount < 5000) return 'Micro';
-    if (amount < 20000) return 'Small';
-    if (amount < 50000) return 'Medium';
-    if (amount < 100000) return 'Large';
-    return 'Very Large';
+    if (amount < 2000) return 'Below Minimum';
+    if (amount < 5000) return 'Starter';
+    if (amount < 20000) return 'Basic';
+    if (amount < 50000) return 'Standard';
+    if (amount < 100000) return 'Premium';
+    return 'VIP';
 }
 
 /**
- * Get tier details for display
+ * Get tier info for display
  */
 function getTierInfo(amount) {
+    if (amount < 2000) {
+        return {
+            tier: 'Below Minimum',
+            error: 'Minimum transaction amount is ₦2,000'
+        };
+    }
+    
     const fees = calculateFees(amount);
     return {
         tier: fees.tier,
-        serviceFee: fees.serviceFee,
-        swapFeePercent: fees.swapFeePercent,
         withdrawalFeePercent: fees.withdrawalFeePercent,
-        minAmount: amount < 5000 ? 200 : amount < 20000 ? 5001 : amount < 50000 ? 20001 : amount < 100000 ? 50001 : 100001,
-        maxAmount: amount < 5000 ? 5000 : amount < 20000 ? 20000 : amount < 50000 ? 50000 : amount < 100000 ? 100000 : null
+        adjustedRate: fees.adjustedRate,
+        userVisibleFeePercent: fees.userVisibleFeePercent,
+        minAmount: amount < 5000 ? 2000 : amount < 20000 ? 5000 : amount < 50000 ? 20000 : amount < 100000 ? 50000 : 100000,
+        maxAmount: amount < 5000 ? 4999 : amount < 20000 ? 19999 : amount < 50000 ? 49999 : amount < 100000 ? 99999 : null
     };
+}
+
+/**
+ * Get withdrawal fee based on user's recent swap tier
+ */
+function getTierForWithdrawal(lastSwapAmount) {
+    if (!lastSwapAmount || lastSwapAmount < 5000) {
+        return {
+            tier: 'Starter',
+            withdrawalFeePercent: 6
+        };
+    } else if (lastSwapAmount < 20000) {
+        return {
+            tier: 'Basic',
+            withdrawalFeePercent: 4.5
+        };
+    } else if (lastSwapAmount < 50000) {
+        return {
+            tier: 'Standard',
+            withdrawalFeePercent: 3.5
+        };
+    } else if (lastSwapAmount < 100000) {
+        return {
+            tier: 'Premium',
+            withdrawalFeePercent: 2.8
+        };
+    } else {
+        return {
+            tier: 'VIP',
+            withdrawalFeePercent: 2
+        };
+    }
 }
 
 module.exports = {
     calculateFees,
+    getTierForWithdrawal,
     getTierName,
     getTierInfo,
     FLUTTERWAVE_COST_NGN
