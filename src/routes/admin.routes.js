@@ -2,8 +2,8 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/admin.controller');
 const adminMiddleware = require('../middleware/admin.middleware');
-const db = require('../../config/db');  // ✅ ADD THIS
-const flutterwaveService = require('../services/flutterwave.service');  // ✅ ADD THIS
+const db = require('../../config/db');
+const flutterwaveService = require('../services/flutterwave.service');
 
 console.log('📊 Loading admin routes...');
 
@@ -128,11 +128,103 @@ router.put('/users/:userId/block', adminController.blockUser);
 router.put('/users/:userId/unblock', adminController.unblockUser);
 
 // =========================
+// USER WALLET & TRANSACTIONS
+// =========================
+router.get('/users/:userId/wallets', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const result = await db.query(
+            'SELECT currency, balance FROM wallets WHERE user_id = $1',
+            [userId]
+        );
+        
+        res.json({
+            status: 'success',
+            data: result.rows
+        });
+    } catch (error) {
+        console.error('Get user wallets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get user wallets'
+        });
+    }
+});
+
+router.get('/users/:userId/transactions', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        const result = await db.query(
+            `SELECT * FROM transactions 
+             WHERE user_id = $1 
+             ORDER BY created_at DESC 
+             LIMIT 20`,
+            [userId]
+        );
+        
+        res.json({
+            status: 'success',
+            data: result.rows
+        });
+    } catch (error) {
+        console.error('Get user transactions error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to get user transactions'
+        });
+    }
+});
+
+// =========================
+// PASSWORD RESET
+// =========================
+router.post('/users/:userId/reset-password', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const bcrypt = require('bcrypt');
+        
+        // Generate random temporary password (8 characters)
+        const tempPassword = Math.random().toString(36).slice(-8).toUpperCase();
+        
+        console.log('🔐 Generating temporary password for user:', userId);
+        
+        // Hash the password
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        
+        // Update user password and set force_password_change flag
+        await db.query(
+            `UPDATE users 
+             SET password = $1, 
+                 force_password_change = true,
+                 updated_at = NOW()
+             WHERE id = $2`,
+            [hashedPassword, userId]
+        );
+        
+        console.log(`✅ Temporary password set for user ${userId}: ${tempPassword}`);
+        
+        res.json({
+            status: 'success',
+            message: 'Temporary password generated successfully',
+            data: {
+                temporaryPassword: tempPassword
+            }
+        });
+    } catch (error) {
+        console.error('❌ Password reset error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to generate temporary password'
+        });
+    }
+});
+
+// =========================
 // TRANSACTION MANAGEMENT
 // =========================
 router.get('/transactions', adminController.getAllTransactions);
-
-console.log('✅ Admin routes loaded successfully with secure middleware');
 
 // =========================
 // REVENUE BREAKDOWN
@@ -196,6 +288,9 @@ router.get('/revenue', async (req, res) => {
     }
 });
 
+// =========================
+// EXCHANGE RATES
+// =========================
 router.post('/rates/manual', async (req, res) => {
     try {
         const { ngnToKsh, kshToNgn, enabled } = req.body;
@@ -249,56 +344,6 @@ router.post('/rates/manual', async (req, res) => {
         res.status(500).json({
             status: 'error',
             message: 'Failed to save manual rates'
-        });
-    }
-});
-
-// =========================
-// USER WALLET & TRANSACTIONS
-// =========================
-router.get('/users/:userId/wallets', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        
-        const result = await db.query(
-            'SELECT currency, balance FROM wallets WHERE user_id = $1',
-            [userId]
-        );
-        
-        res.json({
-            status: 'success',
-            data: result.rows
-        });
-    } catch (error) {
-        console.error('Get user wallets error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to get user wallets'
-        });
-    }
-});
-
-router.get('/users/:userId/transactions', async (req, res) => {
-    try {
-        const { userId } = req.params;
-        
-        const result = await db.query(
-            `SELECT * FROM transactions 
-             WHERE user_id = $1 
-             ORDER BY created_at DESC 
-             LIMIT 20`,
-            [userId]
-        );
-        
-        res.json({
-            status: 'success',
-            data: result.rows
-        });
-    } catch (error) {
-        console.error('Get user transactions error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to get user transactions'
         });
     }
 });
@@ -379,6 +424,6 @@ router.post('/settings', async (req, res) => {
     }
 });
 
-console.log('✅ Admin routes loaded successfully with secure middleware');
+console.log('✅ Admin routes loaded successfully');
 
 module.exports = router;
