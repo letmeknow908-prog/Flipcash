@@ -3,7 +3,7 @@
  * AGGRESSIVE on small amounts, COMPETITIVE on large amounts
  */
 
-const FLUTTERWAVE_COST_NGN = 1194.44;
+const FLUTTERWAVE_COST_NGN = 1194.44; // 107.5 KSH ÷ 0.09
 
 function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
     let swapFeePercent, withdrawalFeePercent, tier, rateMarkupPercent;
@@ -15,57 +15,57 @@ function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
     
     // ✅ AGGRESSIVE TIER STRUCTURE (Profitable on ALL amounts)
     if (amountNGN < 5000) {
-        // Micro: ₦2,000 - ₦4,999 (Hit hard, barely profitable)
+        // Micro: ₦2,000 - ₦4,999
         tier = 'Micro';
-        rateMarkupPercent = 20;  // Hidden in rate - AGGRESSIVE
+        rateMarkupPercent = 20;  // AGGRESSIVE
         swapFeePercent = 0;
         withdrawalFeePercent = 12;
     } else if (amountNGN < 20000) {
-        // Basic: ₦5,000 - ₦19,999 (Good profit margin)
+        // Basic: ₦5,000 - ₦19,999
         tier = 'Basic';
         rateMarkupPercent = 10;
         swapFeePercent = 0;
         withdrawalFeePercent = 8;
     } else if (amountNGN < 50000) {
-        // Standard: ₦20,000 - ₦49,999 (Competitive)
+        // Standard: ₦20,000 - ₦49,999
         tier = 'Standard';
         rateMarkupPercent = 5;
         swapFeePercent = 0;
         withdrawalFeePercent = 5;
     } else if (amountNGN < 100000) {
-        // Premium: ₦50,000 - ₦99,999 (Very competitive)
+        // Premium: ₦50,000 - ₦99,999
         tier = 'Premium';
         rateMarkupPercent = 3;
         swapFeePercent = 0;
         withdrawalFeePercent = 3.5;
     } else if (amountNGN < 500000) {
-        // VIP: ₦100,000 - ₦499,999 (Best rates)
+        // VIP: ₦100,000 - ₦499,999
         tier = 'VIP';
         rateMarkupPercent = 2;
         swapFeePercent = 0;
         withdrawalFeePercent = 2.5;
     } else {
-        // Elite: ₦500,000+ (Premium service)
+        // Elite: ₦500,000+
         tier = 'Elite';
         rateMarkupPercent = 1.5;
         swapFeePercent = 0;
         withdrawalFeePercent = 2;
     }
     
-    // Base exchange rate (from API)
+    // Base exchange rate
     const BASE_RATE = 0.0908;
     
     // Apply hidden markup to rate
     const adjustedRate = BASE_RATE * (1 - rateMarkupPercent / 100);
     
-    // Calculate swap (no visible swap fee)
+    // Calculate swap
     const swapFee = (amountNGN * swapFeePercent) / 100;
     const netAmount = amountNGN - swapFee;
     
     // Convert to KSH using ADJUSTED rate
     const amountKSH = netAmount * adjustedRate;
     
-    // Calculate withdrawal fee
+    // Calculate withdrawal fee (deducted from KSH)
     const withdrawalFeeKSH = (amountKSH * withdrawalFeePercent) / 100;
     
     // Convert withdrawal fee to NGN for revenue calculation
@@ -77,7 +77,7 @@ function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
     const hiddenServiceFeeKSH = baseAmountKSH - amountKSH;
     const hiddenServiceFeeNGN = hiddenServiceFeeKSH / FLUTTERWAVE_RATE;
     
-    // Final amount user receives
+    // Final amount user receives in KSH (AFTER withdrawal fee deducted)
     const finalAmountKSH = amountKSH - withdrawalFeeKSH;
     
     // Total revenue
@@ -89,7 +89,7 @@ function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
     
     return {
         tier,
-        serviceFee: 0,
+        serviceFee: 0, // No visible service fee
         hiddenServiceFeeNGN,
         swapFee,
         swapFeePercent,
@@ -101,8 +101,8 @@ function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
         adjustedRate,
         originalAmount: amountNGN,
         netAmount,
-        amountKSH,
-        finalAmountKSH,
+        amountKSH, // Amount credited to user's wallet
+        finalAmountKSH, // Amount user receives AFTER withdrawal fee
         totalRevenue,
         flutterwaveCost: FLUTTERWAVE_COST_NGN,
         profit,
