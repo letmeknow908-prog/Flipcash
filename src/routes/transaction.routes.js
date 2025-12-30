@@ -321,15 +321,51 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
         await client.query('BEGIN');
         console.log('✅ [WITHDRAW DEBUG] Step 4: Transaction BEGIN');
         
+        // ✅ CRITICAL FIX: Get user's tier from last swap
+        console.log('🔍 [WITHDRAW DEBUG] Step 5: Fetching user tier...');
+        const feeCalculator = require('../utils/feeCalculator');
+        
+        const tierResult = await client.query(
+            `SELECT current_tier, last_swap_amount FROM wallets 
+             WHERE user_id = $1 AND currency = 'KSH'`,
+            [userId]
+        );
+        
+        let withdrawalFeePercent = 6; // Default to highest (Starter tier)
+        let tierInfo = { tier: 'Starter', withdrawalFeePercent: 6 };
+        
+        if (tierResult.rows.length > 0 && tierResult.rows[0].last_swap_amount) {
+            const lastSwapAmount = parseFloat(tierResult.rows[0].last_swap_amount);
+            console.log('💰 Last swap amount:', lastSwapAmount);
+            
+            tierInfo = feeCalculator.getTierForWithdrawal(lastSwapAmount);
+            withdrawalFeePercent = tierInfo.withdrawalFeePercent;
+            
+            console.log('✅ Tier info:', tierInfo);
+        } else {
+            console.log('⚠️ No swap history found, using default tier (Starter - 6%)');
+        }
+        
+        // ✅ Calculate fee based on user's tier
+        const fee = withdrawAmount * (withdrawalFeePercent / 100);
+        const totalRequired = withdrawAmount + fee;
+        
+        console.log('💰 [WITHDRAW DEBUG] Fee calculation:', {
+            tier: tierInfo.tier,
+            feePercent: withdrawalFeePercent + '%',
+            fee: fee.toFixed(2),
+            totalRequired: totalRequired.toFixed(2)
+        });
+        
         // Check balance
-        console.log('🔍 [WITHDRAW DEBUG] Step 5: Checking wallet balance...');
+        console.log('🔍 [WITHDRAW DEBUG] Step 6: Checking wallet balance...');
         const wallet = await client.query(
             'SELECT balance FROM wallets WHERE user_id = $1 AND currency = $2',
             [userId, currency]
         );
         
         if (wallet.rows.length === 0) {
-            console.log('❌ [WITHDRAW DEBUG] Step 5: Wallet NOT FOUND');
+            console.log('❌ [WITHDRAW DEBUG] Step 6: Wallet NOT FOUND');
             await client.query('ROLLBACK');
             return res.status(400).json({
                 status: 'error',
@@ -338,34 +374,32 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
         }
         
         const currentBalance = parseFloat(wallet.rows[0].balance);
-        const fee = withdrawAmount * 0.02;
-        const totalRequired = withdrawAmount + fee;
         
-        console.log('✅ [WITHDRAW DEBUG] Step 5: Wallet found');
+        console.log('✅ [WITHDRAW DEBUG] Step 6: Wallet found');
         console.log('💵 Current balance:', currentBalance);
-        console.log('💸 Fee (2%):', fee);
+        console.log('💸 Fee (' + withdrawalFeePercent + '%):', fee);
         console.log('💰 Total required:', totalRequired);
         
         if (currentBalance < totalRequired) {
-            console.log('❌ [WITHDRAW DEBUG] Step 6: INSUFFICIENT BALANCE');
+            console.log('❌ [WITHDRAW DEBUG] Step 7: INSUFFICIENT BALANCE');
             await client.query('ROLLBACK');
             return res.status(400).json({
                 status: 'error',
-                message: `Insufficient balance. Required: ${totalRequired.toFixed(2)} ${currency}, Available: ${currentBalance.toFixed(2)} ${currency}`
+                message: `Insufficient balance. Required: ${totalRequired.toFixed(2)} ${currency} (${withdrawAmount.toFixed(2)} withdrawal + ${fee.toFixed(2)} fee [${withdrawalFeePercent}%]). Available: ${currentBalance.toFixed(2)} ${currency}`
             });
         }
-        console.log('✅ [WITHDRAW DEBUG] Step 6: Balance check PASSED');
+        console.log('✅ [WITHDRAW DEBUG] Step 7: Balance check PASSED');
         
         // Deduct from wallet
-        console.log('🔍 [WITHDRAW DEBUG] Step 7: Deducting from wallet...');
+        console.log('🔍 [WITHDRAW DEBUG] Step 8: Deducting from wallet...');
         await client.query(
             'UPDATE wallets SET balance = balance - $1, updated_at = NOW() WHERE user_id = $2 AND currency = $3',
             [totalRequired, userId, currency]
         );
-        console.log('✅ [WITHDRAW DEBUG] Step 7: Wallet deducted successfully');
+        console.log('✅ [WITHDRAW DEBUG] Step 8: Wallet deducted successfully');
         
         // Process payout via Flutterwave
-        console.log('🔍 [WITHDRAW DEBUG] Step 8: Calling Flutterwave API...');
+        console.log('🔍 [WITHDRAW DEBUG] Step 9: Calling Flutterwave API...');
         console.log('📤 Flutterwave payload:', JSON.stringify({
             amount: withdrawAmount,
             phone,
@@ -385,11 +419,11 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
             currency
         });
 
-        console.log('📥 [WITHDRAW DEBUG] Step 8: Flutterwave response received');
+        console.log('📥 [WITHDRAW DEBUG] Step 9: Flutterwave response received');
         console.log('📦 Response:', JSON.stringify(payoutResult, null, 2));
 
         if (payoutResult.success) {
-            console.log('✅ [WITHDRAW DEBUG] Step 9: Payout SUCCESS');
+            console.log('✅ [WITHDRAW DEBUG] Step 10: Payout SUCCESS');
             
             // Record transaction
             const transactionId = 'WTH' + Date.now();
@@ -402,12 +436,12 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
                     currency, 
                     withdrawAmount, 
                     'processing',
-                    `Withdrawal to ${beneficiaryName} (${phone}) - ${payoutResult.reference}`
+                    `Withdrawal to ${beneficiaryName} (${phone}) - ${payoutResult.reference} - Fee: ${withdrawalFeePercent}% (${tierInfo.tier} tier)`
                 ]
             );
             
             await client.query('COMMIT');
-            console.log('✅ [WITHDRAW DEBUG] Step 10: Transaction COMMITTED');
+            console.log('✅ [WITHDRAW DEBUG] Step 11: Transaction COMMITTED');
             
             // ✅ ADD: Notify user
             const notificationService = require('../services/notification.service');
@@ -423,16 +457,18 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
                     phone,
                     amount: withdrawAmount,
                     fee,
+                    feePercent: withdrawalFeePercent,
+                    tier: tierInfo.tier,
                     total: totalRequired
                 }
             });
         } else {
-            console.log('❌ [WITHDRAW DEBUG] Step 9: Payout FAILED');
+            console.log('❌ [WITHDRAW DEBUG] Step 10: Payout FAILED');
             console.log('❌ Error from Flutterwave:', payoutResult.error);
             
             // Refund if payout failed
             await client.query('ROLLBACK');
-            console.log('✅ [WITHDRAW DEBUG] Step 10: Transaction ROLLED BACK');
+            console.log('✅ [WITHDRAW DEBUG] Step 11: Transaction ROLLED BACK');
             
             return res.status(500).json({
                 status: 'error',
