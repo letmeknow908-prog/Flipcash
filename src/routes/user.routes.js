@@ -255,9 +255,9 @@ router.post('/change-password', authMiddleware, async (req, res) => {
         // Create new password hash
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         
-        // Update password in database
+        // Update password in database and clear force_password_change flag
         await db.query(
-            'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', 
+            'UPDATE users SET password = $1, force_password_change = false, updated_at = NOW() WHERE id = $2', 
             [hashedPassword, userId]
         );
         
