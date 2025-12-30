@@ -14,11 +14,11 @@ function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
     
     // Tiered fee structure based on amount
     if (amountNGN < 5000) {
-        // Tier 1: Micro (₦200 - ₦5,000)
-        tier = 'Micro';
-        serviceFee = 1500;
-        swapFeePercent = 0;
-        withdrawalFeePercent = 5;
+    // Tier 1: Micro (₦200 - ₦5,000)
+    tier = 'Micro';
+    serviceFee = 1000;  // ✅ REDUCED from ₦1,500
+    swapFeePercent = 0;
+    withdrawalFeePercent = 5;
     } else if (amountNGN < 20000) {
         // Tier 2: Small (₦5,001 - ₦20,000)
         tier = 'Small';
