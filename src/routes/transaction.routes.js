@@ -142,18 +142,65 @@ try {
         console.log('💱 Exchange rate:', rate);
         
         // Calculate amounts
-        const converted = swapAmount * rate;
-        const fee = swapAmount * 0.01; // 1% fee taken from source
-        const finalAmount = converted; // Fee already deducted from source
-        
-        console.log('💰 Converted:', converted, toCurrency);
-        console.log('💸 Fee:', fee, fromCurrency);
+        // ✅ DYNAMIC FEE CALCULATION
+const feeCalculator = require('../utils/feeCalculator');
+
+let fees, finalAmount, totalDeducted;
+
+if (fromCurrency === 'NGN') {
+    // NGN → KSH: Use dynamic fees
+    fees = feeCalculator.calculateFees(swapAmount);
+    
+    console.log('💰 Fee breakdown:', {
+        tier: fees.tier,
+        serviceFee: fees.serviceFee,
+        swapFee: fees.swapFee,
+        withdrawalFeeKSH: fees.withdrawalFeeKSH,
+        totalRevenue: fees.totalRevenue,
+        profit: fees.profit
+    });
+    
+    // For NGN → KSH
+    finalAmount = fees.finalAmountKSH;
+    totalDeducted = swapAmount + fees.serviceFee; // Original amount + service fee
+    
+} else {
+    // KSH → NGN: Simple flat 2% for now (can be enhanced later)
+    const swapFee = swapAmount * 0.02;
+    fees = {
+        swapFee: swapFee,
+        finalAmount: (swapAmount - swapFee) * rate,
+        tier: 'Standard',
+        serviceFee: 0,
+        withdrawalFeeKSH: 0,
+        swapFeePercent: 2,
+        withdrawalFeePercent: 0
+    };
+    
+    finalAmount = fees.finalAmount;
+    totalDeducted = swapAmount; // Just the amount, no additional fees for KSH → NGN
+}
+
+console.log('💰 Final amount:', finalAmount, toCurrency);
+console.log('💸 Total deducted:', totalDeducted, fromCurrency);
         
         // Deduct from source wallet (amount + fee)
-        await client.query(
-            'UPDATE wallets SET balance = balance - $1, updated_at = NOW() WHERE user_id = $2 AND currency = $3',
-            [swapAmount, userId, fromCurrency]
-        );
+        // ✅ Deduct from source wallet
+console.log('💳 Deducting from wallet:', totalDeducted, fromCurrency);
+
+// Check if user has enough balance (including fees)
+if (currentBalance < totalDeducted) {
+    await client.query('ROLLBACK');
+    return res.status(400).json({
+        status: 'error',
+        message: `Insufficient ${fromCurrency} balance. Required: ${totalDeducted.toFixed(2)} (including fees). Available: ${currentBalance.toFixed(2)}`
+    });
+}
+
+await client.query(
+    'UPDATE wallets SET balance = balance - $1, updated_at = NOW() WHERE user_id = $2 AND currency = $3',
+    [totalDeducted, userId, fromCurrency]
+);
         
         // Add to destination wallet
         await client.query(
@@ -184,21 +231,28 @@ await client.query(
         const notificationService = require('../services/notification.service');
         await notificationService.notifySwap(userId, fromCurrency, toCurrency, swapAmount, finalAmount);
         
-        res.json({
-            status: 'success',
-            message: 'Currency swap completed successfully',
-            data: {
-                transactionId,
-                fromCurrency,
-                toCurrency,
-                amount: swapAmount,
-                rate,
-                convertedAmount: converted,
-                fee,
-                finalAmount,
-                status: 'completed'
-            }
-        });
+res.json({
+    status: 'success',
+    message: 'Currency swap completed successfully',
+    data: {
+        transactionId,
+        fromCurrency,
+        toCurrency,
+        amount: swapAmount,
+        rate,
+        fees: {
+            tier: fees.tier,
+            serviceFee: fees.serviceFee || 0,
+            swapFee: fees.swapFee,
+            swapFeePercent: fees.swapFeePercent || 0,
+            withdrawalFeeKSH: fees.withdrawalFeeKSH || 0,
+            withdrawalFeePercent: fees.withdrawalFeePercent || 0,
+            totalFeeNGN: totalDeducted
+        },
+        finalAmount,
+        status: 'completed'
+    }
+});
         
     } catch (error) {
         await client.query('ROLLBACK');
