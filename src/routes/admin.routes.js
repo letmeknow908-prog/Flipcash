@@ -183,7 +183,7 @@ router.get('/users/:userId/transactions', async (req, res) => {
 router.post('/users/:userId/reset-password', async (req, res) => {
     try {
         const { userId } = req.params;
-        const bcrypt = require('bcrypt');
+        const bcrypt = require('bcryptjs');
         
         // Generate random temporary password (8 characters)
         const tempPassword = Math.random().toString(36).slice(-8).toUpperCase();
