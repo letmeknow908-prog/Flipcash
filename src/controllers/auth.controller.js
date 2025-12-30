@@ -114,7 +114,6 @@ exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Validate input
         if (!email || !password) {
             return res.status(400).json({
                 status: 'error',
@@ -124,13 +123,11 @@ exports.login = async (req, res) => {
 
         console.log(`🔐 Login attempt: ${email}`);
 
-        // Find user by email (case-insensitive)
         const userResult = await db.query(
             'SELECT * FROM users WHERE LOWER(email) = LOWER($1)',
             [email]
         );
 
-        // Check if user exists
         if (userResult.rows.length === 0) {
             console.log(`❌ Login failed: User not found - ${email}`);
             return res.status(401).json({
@@ -141,7 +138,6 @@ exports.login = async (req, res) => {
 
         const user = userResult.rows[0];
 
-        // Verify password with bcrypt
         const isPasswordValid = await bcrypt.compare(password, user.password);
         
         if (!isPasswordValid) {
@@ -152,29 +148,17 @@ exports.login = async (req, res) => {
             });
         }
 
-        // ✅ Check if password change is required (AFTER password validation)
-        if (user.force_password_change) {
-            console.log(`⚠️ User ${user.id} must change temporary password`);
-            return res.status(403).json({
-                status: 'error',
-                code: 'PASSWORD_CHANGE_REQUIRED',
-                message: 'You must change your temporary password before continuing',
-                requirePasswordChange: true,
-                userId: user.id
-            });
-        }
-
-        // Generate JWT token
+        // ✅ Generate JWT token (ALWAYS, even for temp password users)
         const accessToken = jwt.sign(
             { 
                 id: user.id, 
                 email: user.email 
             },
             process.env.JWT_SECRET || 'flipcash-secret-key-2025',
-            { expiresIn: '7d' }
+            { expiresIn: user.force_password_change ? '24h' : '7d' }
         );
 
-        // Format user response (exclude password)
+        // Format user response
         const userResponse = {
             id: user.id,
             firstName: user.first_name,
@@ -182,8 +166,23 @@ exports.login = async (req, res) => {
             email: user.email,
             phone: user.phone,
             kycVerified: user.kyc_verified,
-            kycStatus: user.kyc_status
+            kycStatus: user.kyc_status,
+            requirePasswordChange: user.force_password_change || false
         };
+
+        // ✅ Check if password change is required AFTER generating token
+        if (user.force_password_change) {
+            console.log(`⚠️ User ${user.id} must change temporary password`);
+            
+            return res.status(200).json({
+                status: 'success',
+                message: 'Password change required',
+                data: {
+                    accessToken,  // ✅ TOKEN INCLUDED!
+                    user: userResponse
+                }
+            });
+        }
 
         console.log(`✅ Login successful: ${user.email}`);
 
