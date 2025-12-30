@@ -223,9 +223,27 @@ await client.query(
 );
         
         // Commit transaction
-        await client.query('COMMIT');
-        
-        console.log('✅ Swap completed successfully');
+        // After "await client.query('COMMIT');" line ~245
+await client.query('COMMIT');
+console.log('✅ Swap completed successfully');
+
+// ✅ NOW store tier info (after successful commit)
+if (fromCurrency === 'NGN') {
+    try {
+        await db.query(
+            `UPDATE wallets 
+             SET current_tier = $1, 
+                 last_swap_amount = $2, 
+                 last_swap_date = NOW() 
+             WHERE user_id = $3 AND currency = 'KSH'`,
+            [fees.tier, swapAmount, userId]
+        );
+        console.log(`✅ Stored tier '${fees.tier}' for user ${userId}`);
+    } catch (tierError) {
+        console.error('⚠️ Failed to store tier:', tierError);
+        // Non-critical error - swap already completed
+    }
+}
         
         // ✅ ADD: Notify user
         const notificationService = require('../services/notification.service');
