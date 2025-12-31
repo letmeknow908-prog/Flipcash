@@ -1,12 +1,11 @@
 /**
- * FlipCash Fee Calculator - FINAL VERSION
- * Smart fee structure: Tampered rates for small amounts, LIVE rates from ₦10K+
+ * FlipCash Fee Calculator - FINAL FIXED VERSION
  */
 
-const FLUTTERWAVE_COST_NGN = 1194.44; // 107.5 KSH flat fee
-const BASE_RATE = 0.0908; // Live market rate (will be updated from API)
+const FLUTTERWAVE_COST_NGN = 1194.44;
+const BASE_RATE = 0.0908; // This will be overridden by live rate from API
 
-function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
+function calculateFees(amountNGN, baseRate = BASE_RATE) {
     // ✅ MINIMUM: ₦2,000
     if (amountNGN < 2000) {
         throw new Error('Minimum transaction amount is ₦2,000');
@@ -14,72 +13,84 @@ function calculateFees(amountNGN, direction = 'NGN_TO_KSH') {
     
     let tier, rateMarkupPercent, withdrawalFeePercent;
     
-    // ✅ TIER STRUCTURE (Based on user requirements)
+    // ✅ TIER STRUCTURE
     if (amountNGN < 5000) {
-        // Micro: ₦2,000 - ₦4,999 (TAMPERED - High fees)
         tier = 'Micro';
-        rateMarkupPercent = 40;  // User gets 60% of value
+        rateMarkupPercent = 40;
         withdrawalFeePercent = 20;
     } else if (amountNGN < 10000) {
-        // Basic: ₦5,000 - ₦9,999 (TAMPERED - Moderate fees)
         tier = 'Basic';
-        rateMarkupPercent = 15;  // User gets 76% of value
+        rateMarkupPercent = 15;
         withdrawalFeePercent = 12;
     } else if (amountNGN < 50000) {
-        // Standard: ₦10,000 - ₦49,999 (LIVE RATE! 🔥)
         tier = 'Standard';
-        rateMarkupPercent = 0;   // NO MARKUP - LIVE RATE
+        rateMarkupPercent = 0;  // LIVE RATE
         withdrawalFeePercent = 14;
     } else if (amountNGN < 100000) {
-        // Premium: ₦50,000 - ₦99,999 (LIVE RATE! 🔥)
         tier = 'Premium';
-        rateMarkupPercent = 0;   // NO MARKUP - LIVE RATE
+        rateMarkupPercent = 0;  // LIVE RATE
         withdrawalFeePercent = 8;
     } else if (amountNGN < 500000) {
-        // VIP: ₦100,000 - ₦499,999 (LIVE RATE! 🔥)
         tier = 'VIP';
-        rateMarkupPercent = 0;   // NO MARKUP - LIVE RATE
+        rateMarkupPercent = 0;  // LIVE RATE
         withdrawalFeePercent = 5;
     } else {
-        // Elite: ₦500,000+ (LIVE RATE! 🔥)
         tier = 'Elite';
-        rateMarkupPercent = 0;   // NO MARKUP - LIVE RATE
+        rateMarkupPercent = 0;  // LIVE RATE
         withdrawalFeePercent = 3.5;
     }
     
-    // Calculate adjusted rate
-    const adjustedRate = BASE_RATE * (1 - rateMarkupPercent / 100);
+    // Calculate adjusted rate (apply markup to base rate)
+    const adjustedRate = baseRate * (1 - rateMarkupPercent / 100);
     
-    // Swap calculation (no visible fee)
+    // ✅ SWAP PHASE: Convert NGN to KSH using adjusted rate
     const amountKSH = amountNGN * adjustedRate;
     
-    // Hidden markup revenue (in KSH)
-    const realValueKSH = amountNGN * BASE_RATE;
+    // ✅ HIDDEN MARKUP CALCULATION (revenue from rate difference)
+    const realValueKSH = amountNGN * baseRate;
     const hiddenMarkupKSH = realValueKSH - amountKSH;
-    const hiddenMarkupNGN = hiddenMarkupKSH / 0.09; // Convert to NGN
+    const hiddenMarkupNGN = hiddenMarkupKSH / 0.09; // Convert to NGN equivalent
     
-    // Withdrawal fee (visible to user)
+    // ✅ WITHDRAWAL FEE CALCULATION (will be charged when user withdraws)
     const withdrawalFeeKSH = amountKSH * (withdrawalFeePercent / 100);
     const withdrawalFeeNGN = withdrawalFeeKSH / 0.09;
     
-    // Final amount user receives AFTER withdrawal
+    // ✅ FINAL AMOUNT (what user will get after withdrawal fee)
     const finalAmountKSH = amountKSH - withdrawalFeeKSH;
+    
+    // ✅ TOTAL DEDUCTED FROM USER'S NGN WALLET (just the swap amount, no extra fees on swap)
+    const totalDeductedNGN = amountNGN;
     
     // Revenue & Profit
     const totalRevenue = hiddenMarkupNGN + withdrawalFeeNGN;
     const profit = totalRevenue - FLUTTERWAVE_COST_NGN;
     
+    console.log('💰 [FEE CALC] Breakdown:', {
+        tier,
+        amountNGN,
+        baseRate,
+        adjustedRate,
+        rateMarkupPercent: rateMarkupPercent + '%',
+        amountKSH: amountKSH.toFixed(2),
+        withdrawalFeePercent: withdrawalFeePercent + '%',
+        withdrawalFeeKSH: withdrawalFeeKSH.toFixed(2),
+        finalAmountKSH: finalAmountKSH.toFixed(2),
+        totalDeductedNGN,
+        profit: profit.toFixed(2)
+    });
+    
     return {
         tier,
         rateMarkupPercent,
         withdrawalFeePercent,
-        baseRate: BASE_RATE,
+        baseRate,
         adjustedRate,
-        amountKSH,              // Credited to wallet
-        withdrawalFeeKSH,       // Fee deducted on withdrawal
-        finalAmountKSH,         // User receives this
+        amountKSH,                  // Amount credited to KSH wallet
+        withdrawalFeeKSH,           // Fee charged on withdrawal
+        finalAmountKSH,             // What user receives after withdrawal
         hiddenMarkupNGN,
         withdrawalFeeNGN,
+        totalDeductedNGN,           // ✅ CRITICAL: What to deduct from NGN wallet
         totalRevenue,
         flutterwaveCost: FLUTTERWAVE_COST_NGN,
         profit,
