@@ -143,52 +143,57 @@ try {
         
         // Calculate amounts
         // ✅ DYNAMIC FEE CALCULATION
+// ✅ DYNAMIC FEE CALCULATION
 const feeCalculator = require('../utils/feeCalculator');
 
 let fees, finalAmount, totalDeducted;
 
 if (fromCurrency === 'NGN') {
-    // NGN → KSH: Use dynamic fees
-    fees = feeCalculator.calculateFees(swapAmount);
+    // ✅ NGN → KSH: Use dynamic fees with LIVE rate from database
+    fees = feeCalculator.calculateFees(swapAmount, rate);
     
     console.log('💰 Fee breakdown:', {
         tier: fees.tier,
-        serviceFee: fees.serviceFee,
-        swapFee: fees.swapFee,
+        amountKSH: fees.amountKSH,
         withdrawalFeeKSH: fees.withdrawalFeeKSH,
-        totalRevenue: fees.totalRevenue,
+        totalDeductedNGN: fees.totalDeductedNGN,
         profit: fees.profit
     });
     
-    // For NGN → KSH
-    finalAmount = fees.finalAmountKSH;
-    totalDeducted = swapAmount + fees.serviceFee; // Original amount + service fee
+    // ✅ CRITICAL FIX: Use the correct values
+    finalAmount = fees.amountKSH;  // Amount to credit to KSH wallet
+    totalDeducted = fees.totalDeductedNGN;  // Amount to deduct from NGN wallet (just the swap amount)
     
 } else {
-    // KSH → NGN: Simple flat 2% for now (can be enhanced later)
+    // KSH → NGN: Simple flat 2%
     const swapFee = swapAmount * 0.02;
     fees = {
         swapFee: swapFee,
         finalAmount: (swapAmount - swapFee) * rate,
         tier: 'Standard',
-        serviceFee: 0,
         withdrawalFeeKSH: 0,
-        swapFeePercent: 2,
-        withdrawalFeePercent: 0
+        withdrawalFeePercent: 0,
+        totalDeductedNGN: swapAmount
     };
     
     finalAmount = fees.finalAmount;
-    totalDeducted = swapAmount; // Just the amount, no additional fees for KSH → NGN
+    totalDeducted = swapAmount;
 }
 
 console.log('💰 Final amount:', finalAmount, toCurrency);
 console.log('💸 Total deducted:', totalDeducted, fromCurrency);
-        
-        // Deduct from source wallet (amount + fee)
-        // ✅ Deduct from source wallet
-console.log('💳 Deducting from wallet:', totalDeducted, fromCurrency);
 
-// Check if user has enough balance (including fees)
+// ✅ CRITICAL: Verify totalDeducted is a valid number
+if (isNaN(totalDeducted) || totalDeducted <= 0) {
+    await client.query('ROLLBACK');
+    console.error('❌ Invalid totalDeducted:', totalDeducted);
+    return res.status(500).json({
+        status: 'error',
+        message: 'Fee calculation error. Please try again.'
+    });
+}
+
+// ✅ Check if user has enough balance (including fees)
 if (currentBalance < totalDeducted) {
     await client.query('ROLLBACK');
     return res.status(400).json({
@@ -196,6 +201,8 @@ if (currentBalance < totalDeducted) {
         message: `Insufficient ${fromCurrency} balance. Required: ${totalDeducted.toFixed(2)} (including fees). Available: ${currentBalance.toFixed(2)}`
     });
 }
+
+console.log('💳 Deducting from wallet:', totalDeducted, fromCurrency);
 
 await client.query(
     'UPDATE wallets SET balance = balance - $1, updated_at = NOW() WHERE user_id = $2 AND currency = $3',
